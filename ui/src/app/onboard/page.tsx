@@ -1,5 +1,4 @@
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { schools } from "@/lib/types";
 import { OnboardForm } from "@/components/onboard-form";
 
 export default function Page() {

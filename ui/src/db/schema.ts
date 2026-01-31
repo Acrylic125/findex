@@ -12,6 +12,9 @@ import {
   boolean,
   real,
   timestamp,
+  check,
+  foreignKey,
+  primaryKey,
 } from "drizzle-orm/pg-core";
 
 /**
@@ -245,13 +248,33 @@ export const emailVerificationCodesTable = pgTable("email_verification_codes", {
   }).notNull(),
 });
 
-export const indexRequestsTable = pgTable(
-  "index_requests",
+export const swapperTable = pgTable(
+  "swapper",
   {
-    telegramUserId: integer().notNull(),
-    courseIndexId: integer()
+    telegramUserId: integer("telegram_user_id").notNull(),
+    courseId: integer("course_id")
       .notNull()
-      .references(() => courseIndexTable.id, { onDelete: "cascade" }),
+      .references(() => coursesTable.id, { onDelete: "cascade" }),
+    index: varchar({ length: 32 }).notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.telegramUserId, t.courseId] }),
+    foreignKey({
+      columns: [t.courseId, t.index],
+      foreignColumns: [courseIndexTable.courseId, courseIndexTable.index],
+      name: "fk_swapper_courseId_index",
+    }).onDelete("cascade"),
+  ]
+);
+
+export const swapperWantTable = pgTable(
+  "swapper_wants",
+  {
+    telegramUserId: integer("telegram_user_id").notNull(),
+    wantIndex: varchar({ length: 32 }).notNull(),
+    courseId: integer("course_id")
+      .notNull()
+      .references(() => coursesTable.id, { onDelete: "cascade" }),
     requestedAt: timestamp("requested_at", {
       withTimezone: true,
     })
@@ -259,10 +282,16 @@ export const indexRequestsTable = pgTable(
       .defaultNow(),
   },
   (t) => [
-    unique("idx_index_requests_courseIndexId_telegramUserId").on(
-      t.courseIndexId,
-      t.telegramUserId
-    ),
+    foreignKey({
+      columns: [t.telegramUserId, t.courseId],
+      foreignColumns: [swapperTable.telegramUserId, swapperTable.courseId],
+    }).onDelete("cascade"),
+    foreignKey({
+      columns: [t.courseId, t.wantIndex],
+      foreignColumns: [courseIndexTable.courseId, courseIndexTable.index],
+      name: "fk_swapper_wants_courseId_wantIndex",
+    }).onDelete("cascade"),
+    primaryKey({ columns: [t.telegramUserId, t.courseId, t.wantIndex] }),
   ]
 );
 
