@@ -10,7 +10,26 @@ import {
   pgEnum,
   boolean,
   real,
+  timestamp,
 } from "drizzle-orm/pg-core";
+
+/**
+ALTER TABLE programs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE courses ENABLE ROW LEVEL SECURITY;
+ALTER TABLE course_index ENABLE ROW LEVEL SECURITY;
+ALTER TABLE course_index_sources ENABLE ROW LEVEL SECURITY;
+ALTER TABLE course_index_classes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE locations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE location_alt_names ENABLE ROW LEVEL SECURITY;
+ALTER TABLE campuses ENABLE ROW LEVEL SECURITY;
+ALTER TABLE location_images ENABLE ROW LEVEL SECURITY;
+ALTER TABLE location_type_locations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE location_types ENABLE ROW LEVEL SECURITY;
+ALTER TABLE users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE email_verification_codes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE index_requests ENABLE ROW LEVEL SECURITY;
+ALTER TABLE course_index_request_settled ENABLE ROW LEVEL SECURITY;
+ */
 
 export const tsvector = customType<{
   data: string;
@@ -20,6 +39,7 @@ export const tsvector = customType<{
   },
 });
 
+// FNTU Tables
 export const programType = pgEnum("program_type", ["full_time", "part_time"]);
 
 export const programsTable = pgTable(
@@ -191,4 +211,71 @@ export const locationAltNamesTable = pgTable(
     altName: varchar({ length: 255 }).notNull(),
   },
   (t) => [index("idx_location_alt_names_altName").on(t.altName)]
+);
+
+// FIndex Specific Tables
+export const schools = [
+  "NBS",
+  "CCDS",
+  "CCEB",
+  "EEE",
+  "CEE",
+  "MSE",
+  "MAE",
+  "ADM",
+  "SCH",
+  "SSS",
+  "WKWSCI",
+  "LCKM",
+  "SPMS",
+  "SBS",
+  "ASE",
+  "NIE",
+] as const;
+
+export const schoolEnum = pgEnum("faculty", schools);
+
+export const usersTable = pgTable("users", {
+  userId: integer().notNull().primaryKey(),
+  handle: varchar({ length: 255 }).notNull(),
+  email: varchar({ length: 255 }).notNull(),
+  school: schoolEnum(),
+  joinDate: timestamp("join_date").notNull().defaultNow(),
+  verifiedAt: timestamp("verified_at"),
+});
+
+export const emailVerificationCodesTable = pgTable("email_verification_codes", {
+  code: varchar({ length: 255 }).notNull(),
+  userId: integer()
+    .primaryKey()
+    .references(() => usersTable.userId, { onDelete: "cascade" }),
+  expiresAt: timestamp("expires_at").notNull(),
+});
+
+export const indexRequestsTable = pgTable(
+  "index_requests",
+  {
+    telegramUserId: integer().notNull(),
+    courseIndexId: integer()
+      .notNull()
+      .references(() => courseIndexTable.id, { onDelete: "cascade" }),
+    requestedAt: timestamp("requested_at").notNull().defaultNow(),
+  },
+  (t) => [
+    unique("idx_index_requests_courseIndexId_telegramUserId").on(
+      t.courseIndexId,
+      t.telegramUserId
+    ),
+  ]
+);
+
+export const courseIndexRequestSettledTable = pgTable(
+  "course_index_request_settled",
+  {
+    id: serial().notNull().primaryKey(),
+    courseIndexId: integer()
+      .notNull()
+      .references(() => courseIndexTable.id, { onDelete: "cascade" }),
+    settledAt: timestamp("settled_at").notNull().defaultNow(),
+  }
 );
