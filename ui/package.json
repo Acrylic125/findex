@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@base-ui/react": "^1.1.0",
+    "@t3-oss/env-core": "^0.13.10",
     "@tanstack/react-query": "^5.90.20",
     "@telegram-apps/telegram-ui": "^2.1.13",
     "@tma.js/init-data-node": "^2.0.6",
@@ -24,11 +25,15 @@
     "class-variance-authority": "^0.7.1",
     "client-only": "^0.0.1",
     "clsx": "^2.1.1",
+    "dotenv": "^17.2.3",
+    "drizzle-orm": "^0.45.1",
     "eruda": "^3.4.3",
     "lucide-react": "^0.563.0",
     "next": "16.0.7",
     "next-intl": "^4.5.5",
     "normalize.css": "^8.0.1",
+    "pg": "^8.18.0",
+    "postgres": "^3.4.8",
     "react": "^19",
     "react-dom": "^19",
     "server-only": "^0.0.1",
@@ -40,12 +45,15 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.17",
     "@types/node": "^24",
+    "@types/pg": "^8.16.0",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "drizzle-kit": "^0.31.8",
     "eslint": "^9",
     "eslint-config-next": "16.0.4",
     "postcss": "^8",
     "tailwindcss": "^4.1.17",
+    "tsx": "^4.21.0",
     "typescript": "^5.9.3"
   }
 }

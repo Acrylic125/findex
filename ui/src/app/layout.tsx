@@ -4,13 +4,14 @@ import { getLocale } from "next-intl/server";
 
 import { I18nProvider } from "@/core/i18n/provider";
 
-import "@telegram-apps/telegram-ui/dist/styles.css";
-import "normalize.css/normalize.css";
-import "./_assets/globals.css";
+// import "@telegram-apps/telegram-ui/dist/styles.css";
+// import "normalize.css/normalize.css";
+import "./global.css";
 import { Providers } from "@/components/providers";
 import { Inter } from "next/font/google";
+import { cn } from "@/lib/utils";
 
-const inter = Inter({subsets:['latin'],variable:'--font-sans'});
+const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
 
 export const metadata: Metadata = {
   title: "Your Application Title Goes Here",
@@ -21,7 +22,11 @@ export default async function RootLayout({ children }: PropsWithChildren) {
   const locale = await getLocale();
 
   return (
-    <html lang={locale} suppressHydrationWarning className={inter.variable}>
+    <html
+      lang={locale}
+      suppressHydrationWarning
+      className={cn(inter.variable, "dark")}
+    >
       <body>
         <I18nProvider>
           <Providers>{children}</Providers>
