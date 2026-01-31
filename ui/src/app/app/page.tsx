@@ -1,4 +1,4 @@
-import { NewRequest } from "@/components/new-request";
+import { SwapRequestModal } from "@/components/swap-request-modal";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { db } from "@/db";
 import { coursesTable } from "@/db/schema";
@@ -32,7 +32,7 @@ export default async function AppPage() {
         </div>
       </ScrollArea>
       <div className="fixed bottom-8 right-8">
-        <NewRequest courses={courses} />
+        <SwapRequestModal courses={courses} />
       </div>
     </main>
   );

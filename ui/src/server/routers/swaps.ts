@@ -10,7 +10,7 @@ import {
   swapperWantTable,
   usersTable,
 } from "@/db/schema";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, count, eq, inArray } from "drizzle-orm";
 import { CurrentAcadYear } from "@/lib/acad";
 
 export const swapsRouter = createTRPCRouter({
@@ -99,6 +99,70 @@ export const swapsRouter = createTRPCRouter({
           )
         );
       });
+    }),
+  getRequestForCourse: protectedProcedure
+    .input(
+      z.object({
+        courseId: z.number(),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      const [have, request, haveCounts, wantCounts] = await Promise.all([
+        db
+          .select({
+            index: swapperTable.index,
+          })
+          .from(swapperTable)
+          .where(
+            and(
+              eq(swapperTable.telegramUserId, ctx.user.id),
+              eq(swapperTable.courseId, input.courseId)
+            )
+          ),
+        db
+          .select({
+            index: swapperWantTable.wantIndex,
+          })
+          .from(swapperWantTable)
+          .where(
+            and(
+              eq(swapperWantTable.courseId, input.courseId),
+              eq(swapperWantTable.telegramUserId, ctx.user.id)
+            )
+          ),
+        db
+          .select({
+            index: swapperTable.index,
+            count: count(),
+          })
+          .from(swapperTable)
+          .where(and(eq(swapperTable.courseId, input.courseId)))
+          .groupBy(swapperTable.index),
+        db
+          .select({
+            index: swapperWantTable.wantIndex,
+            count: count(),
+          })
+          .from(swapperWantTable)
+          .where(and(eq(swapperWantTable.courseId, input.courseId)))
+          .groupBy(swapperWantTable.wantIndex),
+      ]);
+
+      const haveCountsMap = new Map<string, number>(
+        haveCounts.map((count) => [count.index, count.count])
+      );
+      const wantCountsMap = new Map<string, number>(
+        wantCounts.map((count) => [count.index, count.count])
+      );
+
+      return {
+        have: have.length > 0 ? have[0] : null,
+        want: request.map((request) => ({
+          index: request.index,
+          haveCount: haveCountsMap.get(request.index) ?? 0,
+          wantCount: wantCountsMap.get(request.index) ?? 0,
+        })),
+      };
     }),
   getAllRequests: protectedProcedure.query(async ({ ctx }) => {
     const currentlyHave = await db
