@@ -40,11 +40,12 @@ type Context = Awaited<ReturnType<typeof createTRPCContext>>;
 const t = initTRPC.context<Context>().create();
 
 const isAuthed = t.middleware(({ next, ctx }) => {
-  if (!ctx.auth?.userId) {
+  if (!(ctx.user && ctx.auth)) {
     throw new TRPCError({ code: "UNAUTHORIZED" });
   }
   return next({
     ctx: {
+      user: ctx.user,
       auth: ctx.auth,
     },
   });

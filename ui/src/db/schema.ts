@@ -222,8 +222,14 @@ export const usersTable = pgTable("users", {
   handle: varchar({ length: 255 }).notNull(),
   email: varchar({ length: 255 }).notNull(),
   school: schoolEnum(),
-  joinDate: timestamp("join_date").notNull().defaultNow(),
-  verifiedAt: timestamp("verified_at"),
+  joinDate: timestamp("join_date", {
+    withTimezone: true,
+  })
+    .notNull()
+    .defaultNow(),
+  verifiedAt: timestamp("verified_at", {
+    withTimezone: true,
+  }),
 });
 
 export const emailVerificationCodesTable = pgTable("email_verification_codes", {
@@ -231,7 +237,12 @@ export const emailVerificationCodesTable = pgTable("email_verification_codes", {
   userId: integer()
     .primaryKey()
     .references(() => usersTable.userId, { onDelete: "cascade" }),
-  expiresAt: timestamp("expires_at").notNull(),
+  requestedAt: timestamp("requested_at", {
+    withTimezone: true,
+  }).notNull(),
+  expiresAt: timestamp("expires_at", {
+    withTimezone: true,
+  }).notNull(),
 });
 
 export const indexRequestsTable = pgTable(
@@ -241,7 +252,11 @@ export const indexRequestsTable = pgTable(
     courseIndexId: integer()
       .notNull()
       .references(() => courseIndexTable.id, { onDelete: "cascade" }),
-    requestedAt: timestamp("requested_at").notNull().defaultNow(),
+    requestedAt: timestamp("requested_at", {
+      withTimezone: true,
+    })
+      .notNull()
+      .defaultNow(),
   },
   (t) => [
     unique("idx_index_requests_courseIndexId_telegramUserId").on(
@@ -258,6 +273,10 @@ export const courseIndexRequestSettledTable = pgTable(
     courseIndexId: integer()
       .notNull()
       .references(() => courseIndexTable.id, { onDelete: "cascade" }),
-    settledAt: timestamp("settled_at").notNull().defaultNow(),
+    settledAt: timestamp("settled_at", {
+      withTimezone: true,
+    })
+      .notNull()
+      .defaultNow(),
   }
 );

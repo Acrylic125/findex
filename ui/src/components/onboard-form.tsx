@@ -21,6 +21,7 @@ import {
   AlertDescription,
   AlertTitle,
 } from "@/components/ui/alert";
+import { useRouter } from "next/navigation";
 
 const FormSchema = z.object({
   school: z.enum(schools, { message: "School is required" }),
@@ -31,9 +32,10 @@ const FormSchema = z.object({
 });
 
 export function OnboardForm() {
+  const router = useRouter();
   const verifyMut = trpc.onboard.verifyEmail.useMutation({
     onSuccess: () => {
-      console.log("Email verified successfully");
+      router.push("/onboard/verify");
     },
     onError: (error) => {},
   });
@@ -63,14 +65,6 @@ export function OnboardForm() {
             <FieldLabel htmlFor="form-rhf-school">
               Which School are you from?
             </FieldLabel>
-            {/* <Input
-              {...field}
-              id="form-rhf-school"
-              aria-invalid={fieldState.invalid}
-              placeholder="Select your school"
-              autoComplete="off"
-              className="h-10"
-            /> */}
             <Combobox
               items={schools}
               onValueChange={field.onChange}

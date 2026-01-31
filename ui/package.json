@@ -30,6 +30,7 @@
     "dotenv": "^17.2.3",
     "drizzle-orm": "^0.45.1",
     "eruda": "^3.4.3",
+    "input-otp": "^1.4.2",
     "lucide-react": "^0.563.0",
     "next": "16.0.7",
     "next-intl": "^4.5.5",
