@@ -11,16 +11,26 @@ export const createTRPCContext = cache(
     const authorization = request.headers.get("Authorization");
     if (!authorization) {
       return {
+        user: null,
         auth: null,
       };
     }
     if (!isValid(authorization, process.env.BOT_KEY!)) {
       return {
+        user: null,
+        auth: null,
+      };
+    }
+    const auth = parse(authorization);
+    if (auth.user === undefined) {
+      return {
+        user: null,
         auth: null,
       };
     }
     return {
-      auth: parse(authorization),
+      user: auth.user,
+      auth: auth,
     };
   }
 );

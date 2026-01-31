@@ -1,3 +1,4 @@
+import { schools } from "@/lib/types";
 import { SQL, sql } from "drizzle-orm";
 import {
   integer,
@@ -214,26 +215,7 @@ export const locationAltNamesTable = pgTable(
 );
 
 // FIndex Specific Tables
-export const schools = [
-  "NBS",
-  "CCDS",
-  "CCEB",
-  "EEE",
-  "CEE",
-  "MSE",
-  "MAE",
-  "ADM",
-  "SCH",
-  "SSS",
-  "WKWSCI",
-  "LCKM",
-  "SPMS",
-  "SBS",
-  "ASE",
-  "NIE",
-] as const;
-
-export const schoolEnum = pgEnum("faculty", schools);
+export const schoolEnum = pgEnum("school", schools);
 
 export const usersTable = pgTable("users", {
   userId: integer().notNull().primaryKey(),

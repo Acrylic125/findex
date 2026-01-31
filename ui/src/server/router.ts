@@ -1,13 +1,8 @@
-import { z } from "zod";
-import { createTRPCRouter, publicProcedure } from "./trpc";
+import { createTRPCRouter } from "./trpc";
+import { onboardRouter } from "./routers/onboard";
 
 export const appRouter = createTRPCRouter({
-  test: publicProcedure.query(({ ctx }) => {
-    console.log(ctx.auth);
-    return {
-      message: "Hello, world!",
-    };
-  }),
+  onboard: onboardRouter,
 });
 
 export type AppRouter = typeof appRouter;
