@@ -10,25 +10,94 @@ import {
   swapperWantTable,
   usersTable,
 } from "@/db/schema";
-import { and, eq } from "drizzle-orm";
-import { schools } from "@/lib/types";
-import { SendSmtpEmail } from "@getbrevo/brevo";
-import { emailAPI } from "@/email/brevo";
+import { and, eq, inArray } from "drizzle-orm";
 import { CurrentAcadYear } from "@/lib/acad";
 
 export const swapsRouter = createTRPCRouter({
-  newRequest: protectedProcedure
+  getCourseIndexes: publicProcedure
     .input(
       z.object({
         courseId: z.number(),
-        index: z.string(),
+      })
+    )
+    .query(async ({ input }) => {
+      const indexes = await db
+        .select({
+          id: courseIndexTable.id,
+          index: courseIndexTable.index,
+        })
+        .from(courseIndexTable)
+        .innerJoin(coursesTable, eq(courseIndexTable.courseId, coursesTable.id))
+        .where(
+          and(
+            eq(courseIndexTable.courseId, input.courseId),
+            eq(coursesTable.ay, CurrentAcadYear.ay),
+            eq(coursesTable.semester, CurrentAcadYear.semester)
+          )
+        );
+      return indexes;
+    }),
+  setRequest: protectedProcedure
+    .input(
+      z.object({
+        courseId: z.number(),
+        haveIndex: z.string(),
+        wantIndexes: z.array(z.string()).max(16),
       })
     )
     .mutation(async ({ ctx, input }) => {
-      await db.insert(swapperWantTable).values({
-        telegramUserId: ctx.user.id,
-        courseId: input.courseId,
-        wantIndex: input.index,
+      const currentIndexes = await db
+        .select({
+          index: swapperTable.index,
+        })
+        .from(swapperTable)
+        .where(eq(swapperTable.telegramUserId, ctx.user.id));
+
+      const wantIndexesSet = new Set(input.wantIndexes);
+
+      const toDeleteIndexes = currentIndexes.filter(
+        (index) => !wantIndexesSet.has(index.index)
+      );
+      const toInsertIndexes = input.wantIndexes.filter(
+        (index) => !wantIndexesSet.has(index)
+      );
+
+      await db.transaction(async (tx) => {
+        // First insert the swapper.
+        await tx
+          .insert(swapperTable)
+          .values({
+            telegramUserId: ctx.user.id,
+            courseId: input.courseId,
+            index: input.haveIndex,
+          })
+          .onConflictDoUpdate({
+            target: [swapperTable.telegramUserId, swapperTable.courseId],
+            set: {
+              index: input.haveIndex,
+            },
+          });
+
+        // Then insert what the swapper wants.
+        await tx
+          .insert(swapperWantTable)
+          .values(
+            toInsertIndexes.map((index) => ({
+              telegramUserId: ctx.user.id,
+              courseId: input.courseId,
+              wantIndex: index,
+              requestedAt: new Date(),
+            }))
+          )
+          .onConflictDoNothing();
+
+        // Then delete what the swapper no longer wants.
+        await tx.delete(swapperWantTable).where(
+          inArray(
+            swapperWantTable.wantIndex,
+            toDeleteIndexes.map((index) => index.index)
+          )
+        );
       });
     }),
   getAllRequests: protectedProcedure.query(async ({ ctx }) => {

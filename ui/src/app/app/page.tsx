@@ -1,6 +1,25 @@
+import { NewRequest } from "@/components/new-request";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { db } from "@/db";
+import { coursesTable } from "@/db/schema";
+import { CurrentAcadYear } from "@/lib/acad";
+import { and, eq } from "drizzle-orm";
 
-export default function AppPage() {
+export default async function AppPage() {
+  const courses = await db
+    .select({
+      id: coursesTable.id,
+      code: coursesTable.code,
+      name: coursesTable.name,
+    })
+    .from(coursesTable)
+    .where(
+      and(
+        eq(coursesTable.ay, CurrentAcadYear.ay),
+        eq(coursesTable.semester, CurrentAcadYear.semester)
+      )
+    );
+
   return (
     <main>
       <ScrollArea className="bg-background text-foreground h-screen p-4">
@@ -12,6 +31,9 @@ export default function AppPage() {
           </div>
         </div>
       </ScrollArea>
+      <div className="fixed bottom-8 right-8">
+        <NewRequest courses={courses} />
+      </div>
     </main>
   );
 }
