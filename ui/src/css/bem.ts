@@ -1,4 +1,4 @@
-import { classNames, isRecord } from './classnames';
+import { classNames, isRecord } from "./classnames";
 
 export interface BlockFn {
   (...mods: any): string;
@@ -19,7 +19,7 @@ function applyMods(element: string, mod: any): string {
   }
   if (isRecord(mod)) {
     return classNames(
-      Object.entries(mod).map(([mod, v]) => v && applyMods(element, mod)),
+      Object.entries(mod).map(([mod, v]) => v && applyMods(element, mod))
     );
   }
   const v = classNames(mod);
