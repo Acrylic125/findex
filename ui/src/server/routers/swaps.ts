@@ -10,8 +10,11 @@ import {
   swapperWantTable,
   usersTable,
 } from "@/db/schema";
-import { and, count, eq, inArray } from "drizzle-orm";
+import { and, count, eq, inArray, or } from "drizzle-orm";
 import { CurrentAcadYear } from "@/lib/acad";
+import { alias } from "drizzle-orm/pg-core";
+
+const otherSwapper = alias(swapperTable, "other_swapper");
 
 export const swapsRouter = createTRPCRouter({
   getCourseIndexes: publicProcedure
@@ -158,7 +161,6 @@ export const swapsRouter = createTRPCRouter({
           ),
       ]);
 
-      console.log(have, request);
       return {
         have: have.length > 0 ? have[0] : null,
         want: request.map((request) => ({
@@ -167,40 +169,107 @@ export const swapsRouter = createTRPCRouter({
         })),
       };
     }),
-  getAllRequests: protectedProcedure.query(async ({ ctx }) => {
-    const currentlyHave = await db
-      .select({
-        courseId: swapperTable.courseId,
-        index: swapperTable.index,
-      })
-      .from(swapperTable)
-      .where(eq(swapperTable.telegramUserId, ctx.user.id));
+  getAllRequestsAndMatches: protectedProcedure.query(async ({ ctx }) => {
+    const [currentlyHave, requests, directPotentialMatches] = await Promise.all(
+      [
+        db
+          .select({
+            courseId: swapperTable.courseId,
+            index: swapperTable.index,
+          })
+          .from(swapperTable)
+          .where(eq(swapperTable.telegramUserId, ctx.user.id)),
+        db
+          .select({
+            courseId: coursesTable.id,
+            courseName: coursesTable.name,
+            courseCode: coursesTable.code,
+            index: courseIndexTable.index,
+            requestedAt: swapperWantTable.requestedAt,
+            // ay: coursesTable.ay,
+            semester: coursesTable.semester,
+          })
+          .from(swapperWantTable)
+          .innerJoin(
+            courseIndexTable,
+            eq(swapperWantTable.courseId, courseIndexTable.courseId)
+          )
+          .innerJoin(
+            coursesTable,
+            eq(courseIndexTable.courseId, coursesTable.id)
+          )
+          .where(
+            and(
+              eq(swapperWantTable.telegramUserId, ctx.user.id),
+              eq(coursesTable.ay, CurrentAcadYear.ay),
+              eq(coursesTable.semester, CurrentAcadYear.semester)
+            )
+          ),
+        db
+          .select({
+            id: swapperWantTable.id,
+            courseId: swapperWantTable.courseId,
+            wantIndex: swapperWantTable.wantIndex,
+            // telegramUserId: otherSwapper.telegramUserId,
+          })
+          .from(swapperWantTable)
+          // Me
+          .innerJoin(
+            swapperTable,
+            and(
+              eq(swapperWantTable.courseId, swapperTable.courseId),
+              eq(swapperWantTable.telegramUserId, swapperTable.telegramUserId)
+            )
+          )
+          // Other swapper
+          .innerJoin(
+            otherSwapper,
+            and(
+              eq(swapperWantTable.courseId, otherSwapper.courseId),
+              eq(swapperWantTable.telegramUserId, otherSwapper.telegramUserId)
+            )
+          )
+          .where(
+            and(
+              eq(swapperWantTable.courseId, swapperTable.courseId),
+              // Wanted by me.
+              eq(swapperWantTable.telegramUserId, ctx.user.id),
+              // The other swapper has the index I want.
+              // Whether or not the other swapper has the index I have will
+              // prioritised later.
+              eq(otherSwapper.index, swapperWantTable.wantIndex)
+            )
+          ),
+      ]
+    );
 
     const currentlyHaveMap = new Map<number, string>(
       currentlyHave.map((item) => [item.courseId, item.index])
     );
 
-    const requests = await db
+    // Out of the potential matches, filter out the ones where the other swapper
+    // wants an index that I have.
+    const otherSwapperWantMatches = await db
       .select({
-        courseId: coursesTable.id,
-        courseName: coursesTable.name,
-        courseCode: coursesTable.code,
-        index: courseIndexTable.index,
-        requestedAt: swapperWantTable.requestedAt,
-        // ay: coursesTable.ay,
-        semester: coursesTable.semester,
+        id: swapperWantTable.id,
+        courseId: swapperWantTable.courseId,
+        wantIndex: swapperWantTable.wantIndex,
       })
       .from(swapperWantTable)
-      .innerJoin(
-        courseIndexTable,
-        eq(swapperWantTable.courseId, courseIndexTable.courseId)
-      )
-      .innerJoin(coursesTable, eq(courseIndexTable.courseId, coursesTable.id))
       .where(
         and(
-          eq(swapperWantTable.telegramUserId, ctx.user.id),
-          eq(coursesTable.ay, CurrentAcadYear.ay),
-          eq(coursesTable.semester, CurrentAcadYear.semester)
+          inArray(
+            swapperWantTable.id,
+            directPotentialMatches.map((match) => match.id)
+          ),
+          or(
+            ...Array.from(currentlyHaveMap.entries()).map(([courseId, index]) =>
+              and(
+                eq(swapperWantTable.courseId, courseId),
+                eq(swapperWantTable.wantIndex, index)
+              )
+            )
+          )
         )
       );
 

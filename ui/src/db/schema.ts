@@ -267,9 +267,43 @@ export const swapperTable = pgTable(
   ]
 );
 
+export const swapperMatchTable = pgTable(
+  "swapper_matches",
+  {
+    telegramUserId: integer("telegram_user_id").notNull(),
+    courseId: integer("course_id")
+      .notNull()
+      .references(() => coursesTable.id, { onDelete: "cascade" }),
+    matchTelegramUserId: integer("match_telegram_user_id").notNull(),
+    matchedOn: timestamp("matched_on", {
+      withTimezone: true,
+    })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    primaryKey({
+      columns: [t.telegramUserId, t.courseId],
+    }),
+    foreignKey({
+      columns: [t.telegramUserId, t.courseId],
+      foreignColumns: [swapperTable.telegramUserId, swapperTable.courseId],
+      name: "fk_swapper_matches_telegramUserId_courseId",
+    }).onDelete("cascade"),
+    foreignKey({
+      columns: [t.matchTelegramUserId, t.courseId],
+      foreignColumns: [swapperTable.telegramUserId, swapperTable.courseId],
+      name: "fk_swapper_matches_matchTelegramUserId_courseId",
+    }).onDelete("cascade"),
+  ]
+);
+
 export const swapperWantTable = pgTable(
   "swapper_wants",
   {
+    // Although it can be constructed from the other columns,
+    // the point of this id is to obfuscate the user.
+    id: serial().notNull().primaryKey(),
     telegramUserId: integer("telegram_user_id").notNull(),
     wantIndex: varchar({ length: 32 }).notNull(),
     courseId: integer("course_id")
@@ -291,7 +325,11 @@ export const swapperWantTable = pgTable(
       foreignColumns: [courseIndexTable.courseId, courseIndexTable.index],
       name: "fk_swapper_wants_courseId_wantIndex",
     }).onDelete("cascade"),
-    primaryKey({ columns: [t.telegramUserId, t.courseId, t.wantIndex] }),
+    unique("idx_swapper_wants_telegramUserId_courseId_wantIndex").on(
+      t.telegramUserId,
+      t.courseId,
+      t.wantIndex
+    ),
   ]
 );
 
