@@ -42,24 +42,29 @@ export const swapsRouter = createTRPCRouter({
       z.object({
         courseId: z.number(),
         haveIndex: z.string(),
-        wantIndexes: z.array(z.string()).max(16),
+        wantIndexes: z.array(z.string()).min(1).max(16),
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const currentIndexes = await db
+      const currentWantIndexes = await db
         .select({
-          index: swapperTable.index,
+          index: swapperWantTable.wantIndex,
         })
-        .from(swapperTable)
-        .where(eq(swapperTable.telegramUserId, ctx.user.id));
+        .from(swapperWantTable)
+        .where(
+          and(
+            eq(swapperWantTable.telegramUserId, ctx.user.id),
+            eq(swapperWantTable.courseId, input.courseId)
+          )
+        );
 
       const wantIndexesSet = new Set(input.wantIndexes);
 
-      const toDeleteIndexes = currentIndexes.filter(
+      const toDeleteIndexes = currentWantIndexes.filter(
         (index) => !wantIndexesSet.has(index.index)
       );
       const toInsertIndexes = input.wantIndexes.filter(
-        (index) => !wantIndexesSet.has(index)
+        (index) => !currentWantIndexes.some((i) => i.index === index)
       );
 
       await db.transaction(async (tx) => {
@@ -79,25 +84,29 @@ export const swapsRouter = createTRPCRouter({
           });
 
         // Then insert what the swapper wants.
-        await tx
-          .insert(swapperWantTable)
-          .values(
-            toInsertIndexes.map((index) => ({
-              telegramUserId: ctx.user.id,
-              courseId: input.courseId,
-              wantIndex: index,
-              requestedAt: new Date(),
-            }))
-          )
-          .onConflictDoNothing();
+        if (toInsertIndexes.length > 0) {
+          await tx
+            .insert(swapperWantTable)
+            .values(
+              toInsertIndexes.map((index) => ({
+                telegramUserId: ctx.user.id,
+                courseId: input.courseId,
+                wantIndex: index,
+                requestedAt: new Date(),
+              }))
+            )
+            .onConflictDoNothing();
+        }
 
         // Then delete what the swapper no longer wants.
-        await tx.delete(swapperWantTable).where(
-          inArray(
-            swapperWantTable.wantIndex,
-            toDeleteIndexes.map((index) => index.index)
-          )
-        );
+        if (toDeleteIndexes.length > 0) {
+          await tx.delete(swapperWantTable).where(
+            inArray(
+              swapperWantTable.wantIndex,
+              toDeleteIndexes.map((index) => index.index)
+            )
+          );
+        }
       });
     }),
   getRequestForCourse: protectedProcedure
@@ -107,60 +116,54 @@ export const swapsRouter = createTRPCRouter({
       })
     )
     .query(async ({ ctx, input }) => {
-      const [have, request, haveCounts, wantCounts] = await Promise.all([
+      const [have, request] = await Promise.all([
         db
           .select({
+            indexId: courseIndexTable.id,
             index: swapperTable.index,
           })
           .from(swapperTable)
+          .innerJoin(
+            courseIndexTable,
+            and(
+              eq(swapperTable.index, courseIndexTable.index),
+              eq(swapperTable.courseId, courseIndexTable.courseId)
+            )
+          )
           .where(
             and(
               eq(swapperTable.telegramUserId, ctx.user.id),
               eq(swapperTable.courseId, input.courseId)
             )
-          ),
+          )
+          .limit(1),
         db
           .select({
+            indexId: courseIndexTable.id,
             index: swapperWantTable.wantIndex,
           })
           .from(swapperWantTable)
+          .innerJoin(
+            courseIndexTable,
+            and(
+              eq(swapperWantTable.wantIndex, courseIndexTable.index),
+              eq(swapperWantTable.courseId, courseIndexTable.courseId)
+            )
+          )
           .where(
             and(
               eq(swapperWantTable.courseId, input.courseId),
               eq(swapperWantTable.telegramUserId, ctx.user.id)
             )
           ),
-        db
-          .select({
-            index: swapperTable.index,
-            count: count(),
-          })
-          .from(swapperTable)
-          .where(and(eq(swapperTable.courseId, input.courseId)))
-          .groupBy(swapperTable.index),
-        db
-          .select({
-            index: swapperWantTable.wantIndex,
-            count: count(),
-          })
-          .from(swapperWantTable)
-          .where(and(eq(swapperWantTable.courseId, input.courseId)))
-          .groupBy(swapperWantTable.wantIndex),
       ]);
 
-      const haveCountsMap = new Map<string, number>(
-        haveCounts.map((count) => [count.index, count.count])
-      );
-      const wantCountsMap = new Map<string, number>(
-        wantCounts.map((count) => [count.index, count.count])
-      );
-
+      console.log(have, request);
       return {
         have: have.length > 0 ? have[0] : null,
         want: request.map((request) => ({
+          indexId: request.indexId,
           index: request.index,
-          haveCount: haveCountsMap.get(request.index) ?? 0,
-          wantCount: wantCountsMap.get(request.index) ?? 0,
         })),
       };
     }),

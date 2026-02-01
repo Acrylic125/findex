@@ -22,7 +22,7 @@ import {
   CommandList,
   CommandSeparator,
 } from "./ui/command";
-import { ChevronsUpDown, Plus } from "lucide-react";
+import { ChevronsUpDown, Plus, Send } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { cn } from "@/lib/utils";
 import { useRouter } from "next/navigation";
@@ -31,6 +31,9 @@ import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Field, FieldError, FieldLabel } from "./ui/field";
 import { Badge } from "@/components/ui/badge";
+import { trpc } from "@/server/client";
+import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
+import { Skeleton } from "./ui/skeleton";
 
 type CourseIndex = {
   id: number;
@@ -261,7 +264,12 @@ const SwapRequestFormSchema = z.object({
   haveIndexId: z.number().refine((val) => val !== UNSET_INDEX_ID, {
     message: "Please select a course index you have.",
   }),
-  wantIndexIds: z.array(z.number()).max(16),
+  wantIndexIds: z
+    .array(z.number())
+    .min(1, {
+      message: "Please select at least one course index you want.",
+    })
+    .max(16),
 });
 
 export function SwapRequestForm({
@@ -271,16 +279,41 @@ export function SwapRequestForm({
   courseIndexes: CourseIndex[];
   courseId: number;
 }) {
+  const api = trpc.useUtils();
   const form = useForm<z.infer<typeof SwapRequestFormSchema>>({
     resolver: zodResolver(SwapRequestFormSchema),
-    defaultValues: {
-      haveIndexId: UNSET_INDEX_ID,
-      wantIndexIds: [],
+    defaultValues: async () => {
+      const request = await api.swaps.getRequestForCourse.fetch({
+        courseId,
+      });
+
+      return {
+        haveIndexId: request.have?.indexId ?? UNSET_INDEX_ID,
+        wantIndexIds: request.want.map((w) => w.indexId),
+      };
+    },
+  });
+
+  const setRequestMut = trpc.swaps.setRequest.useMutation({
+    onSuccess: () => {
+      api.swaps.invalidate();
     },
   });
 
   function onSubmit(data: z.infer<typeof SwapRequestFormSchema>) {
-    console.log(data);
+    setRequestMut.mutate({
+      courseId,
+      haveIndex:
+        courseIndexes.find((index) => index.id === data.haveIndexId)?.index ??
+        "",
+      wantIndexes: courseIndexes
+        .filter((index) => data.wantIndexIds.includes(index.id))
+        .map((index) => index.index),
+    });
+  }
+
+  if (form.formState.isLoading) {
+    return <Skeleton className="h-48 w-full" />;
   }
 
   return (
@@ -336,33 +369,34 @@ export function SwapRequestForm({
           );
         }}
       />
-      {/* <div className="flex flex-col gap-2">
-        {verifyMut.error && (
+
+      <div className="flex flex-col gap-2">
+        {setRequestMut.error && (
           <Alert variant="destructive">
             <AlertTitle>Error!</AlertTitle>
-            <AlertDescription>{verifyMut.error.message}</AlertDescription>
+            <AlertDescription>{setRequestMut.error.message}</AlertDescription>
           </Alert>
         )}
 
-        {verifyMut.isSuccess && (
-          <Alert variant="default">
+        {setRequestMut.isSuccess && (
+          <Alert variant="success">
             <AlertTitle>Success!</AlertTitle>
-            <AlertDescription>
-              Redirecting to verification page...
-            </AlertDescription>
           </Alert>
         )}
 
         <div className="w-full flex justify-end">
           <Button
             type="submit"
-            className="h-10 w-fit"
-            disabled={verifyMut.isPending}
+            disabled={
+              form.formState.isSubmitting ||
+              form.formState.isLoading ||
+              setRequestMut.isPending
+            }
           >
-            Verify Email
+            <Send className="size-4" /> Request
           </Button>
         </div>
-      </div> */}
+      </div>
     </form>
   );
 }
