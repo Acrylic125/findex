@@ -116,7 +116,7 @@ function SelectCourseCommand({
                 value={course.id.toString()}
                 onSelect={() => {
                   onChange(course);
-                  inputRef.current?.focus();
+                  // inputRef.current?.focus();
                 }}
                 style={{
                   height: `${virtualItem.size}px`,

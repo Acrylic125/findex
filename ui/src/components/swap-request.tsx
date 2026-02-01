@@ -132,7 +132,7 @@ function SelectCourseIndexCommand({
                     } else {
                       onChange([courseIndex]);
                     }
-                    inputRef.current?.focus();
+                    // inputRef.current?.focus();
                     return;
                   }
                   onChange(
@@ -140,7 +140,7 @@ function SelectCourseIndexCommand({
                       ? value?.filter((v) => v.id !== courseIndex.id)
                       : [...(value || []), courseIndex]
                   );
-                  inputRef.current?.focus();
+                  // inputRef.current?.focus();
                 }}
                 style={{
                   height: `${virtualItem.size}px`,
