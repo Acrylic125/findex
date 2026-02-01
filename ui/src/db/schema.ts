@@ -15,6 +15,7 @@ import {
   check,
   foreignKey,
   primaryKey,
+  bigint,
 } from "drizzle-orm/pg-core";
 
 /**
@@ -221,7 +222,7 @@ export const locationAltNamesTable = pgTable(
 export const schoolEnum = pgEnum("school", schools);
 
 export const usersTable = pgTable("users", {
-  userId: integer().notNull().primaryKey(),
+  userId: bigint("user_id", { mode: "number" }).notNull().primaryKey(),
   handle: varchar({ length: 255 }).notNull(),
   email: varchar({ length: 255 }).notNull(),
   school: schoolEnum(),
@@ -237,7 +238,7 @@ export const usersTable = pgTable("users", {
 
 export const emailVerificationCodesTable = pgTable("email_verification_codes", {
   code: varchar({ length: 255 }).notNull(),
-  userId: integer()
+  userId: bigint("user_id", { mode: "number" })
     .primaryKey()
     .references(() => usersTable.userId, { onDelete: "cascade" }),
   requestedAt: timestamp("requested_at", {
@@ -270,11 +271,13 @@ export const swapperTable = pgTable(
 export const swapperMatchTable = pgTable(
   "swapper_matches",
   {
-    telegramUserId: integer("telegram_user_id").notNull(),
+    telegramUserId: bigint("telegram_user_id", { mode: "number" }).notNull(),
     courseId: integer("course_id")
       .notNull()
       .references(() => coursesTable.id, { onDelete: "cascade" }),
-    matchTelegramUserId: integer("match_telegram_user_id").notNull(),
+    matchTelegramUserId: bigint("match_telegram_user_id", {
+      mode: "number",
+    }).notNull(),
     matchedOn: timestamp("matched_on", {
       withTimezone: true,
     })
@@ -304,7 +307,7 @@ export const swapperWantTable = pgTable(
     // Although it can be constructed from the other columns,
     // the point of this id is to obfuscate the user.
     id: serial().notNull().primaryKey(),
-    telegramUserId: integer("telegram_user_id").notNull(),
+    telegramUserId: bigint("telegram_user_id", { mode: "number" }).notNull(),
     wantIndex: varchar({ length: 32 }).notNull(),
     courseId: integer("course_id")
       .notNull()
