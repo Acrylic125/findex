@@ -3,9 +3,15 @@ import { cache } from "react";
 import { isValid, parse } from "@tma.js/init-data-node";
 import { FetchCreateContextFnOptions } from "@trpc/server/adapters/fetch";
 import superjson from "superjson";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 
 export const createTRPCContext = cache(
   async ({ req: request }: FetchCreateContextFnOptions) => {
+    const session = await getServerSession(authOptions);
+
+    console.log("session", session);
+
     /**
      * @see: https://trpc.io/docs/server/context
      */

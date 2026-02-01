@@ -20,7 +20,7 @@ export const userRouter = createTRPCRouter({
         verifiedAt: usersTable.verifiedAt,
       })
       .from(usersTable)
-      .where(eq(usersTable.userId, BigInt(ctx.user.id)))
+      .where(eq(usersTable.userId, ctx.user.id))
       .limit(1);
     if (user.length === 0) {
       return null;

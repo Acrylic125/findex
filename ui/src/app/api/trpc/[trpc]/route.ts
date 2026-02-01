@@ -8,6 +8,9 @@ const handler = (req: Request) =>
     req,
     router: appRouter,
     createContext: createTRPCContext,
+    onError: ({ error, path, input, type, ctx }) => {
+      console.log(error);
+    },
     // createContext: async (opts) => await createTRPCContext(opts.req),
   });
 

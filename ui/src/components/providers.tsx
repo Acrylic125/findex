@@ -6,6 +6,7 @@ import { trpc } from "@/server/client";
 import { getTrpcUrl } from "@/server/utils";
 import { retrieveRawInitData } from "@tma.js/sdk-react";
 import superjson from "superjson";
+import { SessionProvider } from "next-auth/react";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(
@@ -39,7 +40,11 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   return (
     <trpc.Provider client={trpcClient} queryClient={queryClient}>
-      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+      <SessionProvider>
+        <QueryClientProvider client={queryClient}>
+          {children}
+        </QueryClientProvider>
+      </SessionProvider>
     </trpc.Provider>
   );
 }
