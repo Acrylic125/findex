@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { coursesTable } from "@/db/schema";
 import { CurrentAcadYear } from "@/lib/acad";
 import { and, eq } from "drizzle-orm";
+import { MySwaps } from "@/components/my-swaps";
 
 export default async function AppPage() {
   const courses = await db
@@ -29,6 +30,7 @@ export default async function AppPage() {
               <h1 className="text-xl font-bold">My Swaps</h1>
             </div>
           </div>
+          <MySwaps />
         </div>
       </ScrollArea>
       <div className="fixed bottom-8 right-8">

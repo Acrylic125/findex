@@ -16,6 +16,16 @@ import { alias } from "drizzle-orm/pg-core";
 
 const otherSwapper = alias(swapperTable, "other_swapper");
 
+type MatchIndexResponse = {
+  // Null if the user has never mark as match.
+  // Username
+  by: string | null;
+  isPerfectMatch: boolean;
+  id: number;
+  index: string;
+  requestedAt: Date;
+};
+
 export const swapsRouter = createTRPCRouter({
   getCourseIndexes: publicProcedure
     .input(
@@ -187,12 +197,15 @@ export const swapsRouter = createTRPCRouter({
             index: courseIndexTable.index,
             requestedAt: swapperWantTable.requestedAt,
             // ay: coursesTable.ay,
-            semester: coursesTable.semester,
+            // semester: coursesTable.semester,
           })
           .from(swapperWantTable)
           .innerJoin(
             courseIndexTable,
-            eq(swapperWantTable.courseId, courseIndexTable.courseId)
+            and(
+              eq(swapperWantTable.courseId, courseIndexTable.courseId),
+              eq(swapperWantTable.wantIndex, courseIndexTable.index)
+            )
           )
           .innerJoin(
             coursesTable,
@@ -210,7 +223,9 @@ export const swapsRouter = createTRPCRouter({
             id: swapperWantTable.id,
             courseId: swapperWantTable.courseId,
             wantIndex: swapperWantTable.wantIndex,
-            // telegramUserId: otherSwapper.telegramUserId,
+            requestedAt: swapperWantTable.requestedAt,
+            telegramUserId: otherSwapper.telegramUserId,
+            username: usersTable.handle, // may not be up to date
           })
           .from(swapperWantTable)
           // Me
@@ -229,6 +244,10 @@ export const swapsRouter = createTRPCRouter({
               eq(swapperWantTable.telegramUserId, otherSwapper.telegramUserId)
             )
           )
+          .innerJoin(
+            usersTable,
+            eq(otherSwapper.telegramUserId, usersTable.userId)
+          )
           .where(
             and(
               eq(swapperWantTable.courseId, swapperTable.courseId),
@@ -243,9 +262,23 @@ export const swapsRouter = createTRPCRouter({
       ]
     );
 
+    console.log("currentlyHave", currentlyHave);
+    console.log("requests", requests);
+    console.log("directPotentialMatches", directPotentialMatches);
+
     const currentlyHaveMap = new Map<number, string>(
       currentlyHave.map((item) => [item.courseId, item.index])
     );
+    const potentialMatchesMap = new Map<
+      number,
+      (typeof directPotentialMatches)[number][]
+    >();
+    for (const match of directPotentialMatches) {
+      if (!potentialMatchesMap.has(match.courseId)) {
+        potentialMatchesMap.set(match.courseId, []);
+      }
+      potentialMatchesMap.get(match.courseId)!.push(match);
+    }
 
     // Out of the potential matches, filter out the ones where the other swapper
     // wants an index that I have.
@@ -253,7 +286,7 @@ export const swapsRouter = createTRPCRouter({
       .select({
         id: swapperWantTable.id,
         courseId: swapperWantTable.courseId,
-        wantIndex: swapperWantTable.wantIndex,
+        // wantIndex: swapperWantTable.wantIndex,
       })
       .from(swapperWantTable)
       .where(
@@ -272,16 +305,102 @@ export const swapsRouter = createTRPCRouter({
           )
         )
       );
+    const otherSwapperWantMatchesMap = new Map<
+      number,
+      (typeof otherSwapperWantMatches)[number][]
+    >();
+    for (const match of otherSwapperWantMatches) {
+      if (!otherSwapperWantMatchesMap.has(match.courseId)) {
+        otherSwapperWantMatchesMap.set(match.courseId, []);
+      }
+      otherSwapperWantMatchesMap.get(match.courseId)!.push(match);
+    }
+
+    // Collate the matches.
+    const matchesMap = new Map<
+      number,
+      {
+        perfectMatches: MatchIndexResponse[];
+        otherMatches: MatchIndexResponse[];
+      }
+    >();
+
+    for (const [courseId, matches] of Array.from(
+      potentialMatchesMap.entries()
+    )) {
+      const deduceBy = (match: (typeof matches)[number]) => {
+        if (match.telegramUserId === ctx.user.id) {
+          return match.username;
+        }
+        return null;
+      };
+
+      const otherSwapperWantMatches = otherSwapperWantMatchesMap.get(courseId);
+      if (!otherSwapperWantMatches) {
+        matchesMap.set(courseId, {
+          perfectMatches: [],
+          otherMatches: matches.map((match) => ({
+            by: deduceBy(match),
+            isPerfectMatch: false,
+            id: match.id,
+            index: match.wantIndex,
+            requestedAt: match.requestedAt,
+          })),
+        });
+        continue;
+      }
+      const perfectMatches: MatchIndexResponse[] = [];
+      const otherMatches: MatchIndexResponse[] = [];
+      for (const match of matches) {
+        if (
+          otherSwapperWantMatches.some(
+            (otherMatch) => otherMatch.id === match.id
+          )
+        ) {
+          perfectMatches.push({
+            by: deduceBy(match),
+            isPerfectMatch: true,
+            id: match.id,
+            index: match.wantIndex,
+            requestedAt: match.requestedAt,
+          });
+        } else {
+          otherMatches.push({
+            by: deduceBy(match),
+            isPerfectMatch: false,
+            id: match.id,
+            index: match.wantIndex,
+            requestedAt: match.requestedAt,
+          });
+        }
+      }
+
+      matchesMap.set(courseId, {
+        perfectMatches,
+        otherMatches,
+      });
+    }
 
     // Group by course
     const groupedRequests = requests.reduce(
       (acc, request) => {
         if (!acc[request.courseId]) {
-          const haveIndex = currentlyHaveMap.get(request.courseId)?.toString();
+          const haveIndex = currentlyHaveMap.get(request.courseId);
           // Skip if user does not have this course
           if (!haveIndex) {
+            console.log("skipping", request.courseId);
             return acc;
           }
+          const matchesGrouped = matchesMap.get(request.courseId);
+          const matches = [
+            ...(matchesGrouped?.perfectMatches.sort(
+              (a, b) => b.requestedAt.getTime() - a.requestedAt.getTime()
+            ) ?? []),
+            ...(matchesGrouped?.otherMatches.sort(
+              (a, b) => b.requestedAt.getTime() - a.requestedAt.getTime()
+            ) ?? []),
+          ];
+
           acc[request.courseId] = {
             course: {
               id: request.courseId,
@@ -289,10 +408,12 @@ export const swapsRouter = createTRPCRouter({
               name: request.courseName,
               haveIndex: haveIndex,
             },
-            indexes: [],
+            wantIndexes: [],
+            matches: matches.slice(0, 5),
+            hasMoreMatches: matches.length > 5,
           };
         }
-        acc[request.courseId].indexes.push({
+        acc[request.courseId].wantIndexes.push({
           index: request.index,
           requestedAt: request.requestedAt,
         });
@@ -307,11 +428,16 @@ export const swapsRouter = createTRPCRouter({
             name: string;
             haveIndex: string;
           };
-          indexes: { index: string; requestedAt: Date }[];
+          wantIndexes: { index: string; requestedAt: Date }[];
+          matches: MatchIndexResponse[];
+          hasMoreMatches: boolean;
+          // perfectMatches: MatchIndexResponse[];
+          // otherMatches: MatchIndexResponse[];
         }
       >
     );
 
-    return groupedRequests;
+    console.log(groupedRequests);
+    return Object.values(groupedRequests);
   }),
 });

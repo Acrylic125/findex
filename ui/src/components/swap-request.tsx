@@ -296,7 +296,7 @@ export function SwapRequestForm({
 
   const setRequestMut = trpc.swaps.setRequest.useMutation({
     onSuccess: () => {
-      api.swaps.invalidate();
+      api.swaps.getAllRequestsAndMatches.invalidate();
     },
   });
 
