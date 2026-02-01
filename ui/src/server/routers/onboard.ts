@@ -32,12 +32,12 @@ export const onboardRouter = createTRPCRouter({
       const user = await db
         .select()
         .from(usersTable)
-        .where(eq(usersTable.userId, ctx.user.id))
+        .where(eq(usersTable.userId, BigInt(ctx.user.id)))
         .limit(1);
 
       if (user.length === 0) {
         await db.insert(usersTable).values({
-          userId: ctx.user.id,
+          userId: BigInt(ctx.user.id),
           email: email,
           handle: ctx.user.username,
           school: input.school,
@@ -56,7 +56,7 @@ export const onboardRouter = createTRPCRouter({
             email: email,
             school: input.school,
           })
-          .where(eq(usersTable.userId, ctx.user.id));
+          .where(eq(usersTable.userId, BigInt(ctx.user.id)));
       }
 
       const verificationCodeInt = Math.floor(Math.random() * 999999);
@@ -66,7 +66,7 @@ export const onboardRouter = createTRPCRouter({
         .insert(emailVerificationCodesTable)
         .values({
           code: verificationCode,
-          userId: ctx.user.id,
+          userId: BigInt(ctx.user.id),
           requestedAt: new Date(),
           expiresAt: new Date(Date.now() + 1000 * 60 * 15),
         })
@@ -111,7 +111,7 @@ export const onboardRouter = createTRPCRouter({
         verifiedAt: usersTable.verifiedAt,
       })
       .from(usersTable)
-      .where(eq(usersTable.userId, ctx.user.id))
+      .where(eq(usersTable.userId, BigInt(ctx.user.id)))
       .limit(1);
     if (user.length === 0) {
       throw new TRPCError({ code: "UNAUTHORIZED" });
@@ -127,7 +127,7 @@ export const onboardRouter = createTRPCRouter({
     const currentVerificationCode = await db
       .select()
       .from(emailVerificationCodesTable)
-      .where(eq(emailVerificationCodesTable.userId, ctx.user.id))
+      .where(eq(emailVerificationCodesTable.userId, BigInt(ctx.user.id)))
       .limit(1);
     if (
       currentVerificationCode.length > 0 &&
@@ -146,7 +146,7 @@ export const onboardRouter = createTRPCRouter({
       .insert(emailVerificationCodesTable)
       .values({
         code: verificationCode,
-        userId: ctx.user.id,
+        userId: BigInt(ctx.user.id),
         requestedAt: new Date(),
         expiresAt: new Date(Date.now() + 1000 * 60 * 15),
       })
@@ -192,7 +192,7 @@ export const onboardRouter = createTRPCRouter({
       const user = await db
         .select()
         .from(usersTable)
-        .where(eq(usersTable.userId, ctx.user.id))
+        .where(eq(usersTable.userId, BigInt(ctx.user.id)))
         .limit(1);
       if (user.length === 0) {
         throw new TRPCError({ code: "UNAUTHORIZED" });
@@ -210,7 +210,7 @@ export const onboardRouter = createTRPCRouter({
         .where(
           and(
             eq(emailVerificationCodesTable.code, code),
-            eq(emailVerificationCodesTable.userId, ctx.user.id),
+            eq(emailVerificationCodesTable.userId, BigInt(ctx.user.id)),
             gte(emailVerificationCodesTable.expiresAt, new Date())
           )
         )
@@ -221,7 +221,7 @@ export const onboardRouter = createTRPCRouter({
       await db
         .update(usersTable)
         .set({ verifiedAt: new Date() })
-        .where(eq(usersTable.userId, ctx.user.id));
+        .where(eq(usersTable.userId, BigInt(ctx.user.id)));
       return {
         success: true,
       };

@@ -222,7 +222,7 @@ export const locationAltNamesTable = pgTable(
 export const schoolEnum = pgEnum("school", schools);
 
 export const usersTable = pgTable("users", {
-  userId: bigint("user_id", { mode: "number" }).notNull().primaryKey(),
+  userId: bigint("user_id", { mode: "bigint" }).notNull().primaryKey(),
   handle: varchar({ length: 255 }).notNull(),
   email: varchar({ length: 255 }).notNull(),
   school: schoolEnum(),
@@ -238,7 +238,7 @@ export const usersTable = pgTable("users", {
 
 export const emailVerificationCodesTable = pgTable("email_verification_codes", {
   code: varchar({ length: 255 }).notNull(),
-  userId: bigint("user_id", { mode: "number" })
+  userId: bigint("user_id", { mode: "bigint" })
     .primaryKey()
     .references(() => usersTable.userId, { onDelete: "cascade" }),
   requestedAt: timestamp("requested_at", {
@@ -252,7 +252,7 @@ export const emailVerificationCodesTable = pgTable("email_verification_codes", {
 export const swapperTable = pgTable(
   "swapper",
   {
-    telegramUserId: integer("telegram_user_id").notNull(),
+    telegramUserId: bigint("telegram_user_id", { mode: "bigint" }).notNull(),
     courseId: integer("course_id")
       .notNull()
       .references(() => coursesTable.id, { onDelete: "cascade" }),
@@ -271,12 +271,12 @@ export const swapperTable = pgTable(
 export const swapperMatchTable = pgTable(
   "swapper_matches",
   {
-    telegramUserId: bigint("telegram_user_id", { mode: "number" }).notNull(),
+    telegramUserId: bigint("telegram_user_id", { mode: "bigint" }).notNull(),
     courseId: integer("course_id")
       .notNull()
       .references(() => coursesTable.id, { onDelete: "cascade" }),
     matchTelegramUserId: bigint("match_telegram_user_id", {
-      mode: "number",
+      mode: "bigint",
     }).notNull(),
     matchedOn: timestamp("matched_on", {
       withTimezone: true,
@@ -307,7 +307,7 @@ export const swapperWantTable = pgTable(
     // Although it can be constructed from the other columns,
     // the point of this id is to obfuscate the user.
     id: serial().notNull().primaryKey(),
-    telegramUserId: bigint("telegram_user_id", { mode: "number" }).notNull(),
+    telegramUserId: bigint("telegram_user_id", { mode: "bigint" }).notNull(),
     wantIndex: varchar({ length: 32 }).notNull(),
     courseId: integer("course_id")
       .notNull()

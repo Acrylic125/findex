@@ -66,7 +66,7 @@ export const swapsRouter = createTRPCRouter({
         .from(swapperWantTable)
         .where(
           and(
-            eq(swapperWantTable.telegramUserId, ctx.user.id),
+            eq(swapperWantTable.telegramUserId, BigInt(ctx.user.id)),
             eq(swapperWantTable.courseId, input.courseId)
           )
         );
@@ -85,7 +85,7 @@ export const swapsRouter = createTRPCRouter({
         await tx
           .insert(swapperTable)
           .values({
-            telegramUserId: ctx.user.id,
+            telegramUserId: BigInt(ctx.user.id),
             courseId: input.courseId,
             index: input.haveIndex,
           })
@@ -102,7 +102,7 @@ export const swapsRouter = createTRPCRouter({
             .insert(swapperWantTable)
             .values(
               toInsertIndexes.map((index) => ({
-                telegramUserId: ctx.user.id,
+                telegramUserId: BigInt(ctx.user.id),
                 courseId: input.courseId,
                 wantIndex: index,
                 requestedAt: new Date(),
@@ -145,7 +145,7 @@ export const swapsRouter = createTRPCRouter({
           )
           .where(
             and(
-              eq(swapperTable.telegramUserId, ctx.user.id),
+              eq(swapperTable.telegramUserId, BigInt(ctx.user.id)),
               eq(swapperTable.courseId, input.courseId)
             )
           )
@@ -166,7 +166,7 @@ export const swapsRouter = createTRPCRouter({
           .where(
             and(
               eq(swapperWantTable.courseId, input.courseId),
-              eq(swapperWantTable.telegramUserId, ctx.user.id)
+              eq(swapperWantTable.telegramUserId, BigInt(ctx.user.id))
             )
           ),
       ]);
@@ -188,7 +188,7 @@ export const swapsRouter = createTRPCRouter({
             index: swapperTable.index,
           })
           .from(swapperTable)
-          .where(eq(swapperTable.telegramUserId, ctx.user.id)),
+          .where(eq(swapperTable.telegramUserId, BigInt(ctx.user.id))),
         db
           .select({
             courseId: coursesTable.id,
@@ -213,7 +213,7 @@ export const swapsRouter = createTRPCRouter({
           )
           .where(
             and(
-              eq(swapperWantTable.telegramUserId, ctx.user.id),
+              eq(swapperWantTable.telegramUserId, BigInt(ctx.user.id)),
               eq(coursesTable.ay, CurrentAcadYear.ay),
               eq(coursesTable.semester, CurrentAcadYear.semester)
             )
@@ -252,7 +252,7 @@ export const swapsRouter = createTRPCRouter({
             and(
               eq(swapperWantTable.courseId, swapperTable.courseId),
               // Wanted by me.
-              eq(swapperWantTable.telegramUserId, ctx.user.id),
+              eq(swapperWantTable.telegramUserId, BigInt(ctx.user.id)),
               // The other swapper has the index I want.
               // Whether or not the other swapper has the index I have will
               // prioritised later.
@@ -329,7 +329,7 @@ export const swapsRouter = createTRPCRouter({
       potentialMatchesMap.entries()
     )) {
       const deduceBy = (match: (typeof matches)[number]) => {
-        if (match.telegramUserId === ctx.user.id) {
+        if (match.telegramUserId === BigInt(ctx.user.id)) {
           return match.username;
         }
         return null;
