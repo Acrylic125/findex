@@ -5,6 +5,7 @@ import { httpBatchLink } from "@trpc/react-query";
 import { trpc } from "@/server/client";
 import { getTrpcUrl } from "@/server/utils";
 import { retrieveRawInitData } from "@tma.js/sdk-react";
+import superjson from "superjson";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(
@@ -24,6 +25,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
       links: [
         httpBatchLink({
           url: getTrpcUrl(),
+          transformer: superjson,
           headers: () => {
             const rawInitData = retrieveRawInitData();
             return {

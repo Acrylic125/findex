@@ -2,6 +2,7 @@ import { initTRPC, TRPCError } from "@trpc/server";
 import { cache } from "react";
 import { isValid, parse } from "@tma.js/init-data-node";
 import { FetchCreateContextFnOptions } from "@trpc/server/adapters/fetch";
+import superjson from "superjson";
 
 export const createTRPCContext = cache(
   async ({ req: request }: FetchCreateContextFnOptions) => {
@@ -37,7 +38,9 @@ export const createTRPCContext = cache(
 
 type Context = Awaited<ReturnType<typeof createTRPCContext>>;
 
-const t = initTRPC.context<Context>().create();
+const t = initTRPC.context<Context>().create({
+  transformer: superjson,
+});
 
 const isAuthed = t.middleware(({ next, ctx }) => {
   if (!(ctx.user && ctx.auth)) {
