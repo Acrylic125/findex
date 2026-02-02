@@ -224,30 +224,30 @@ export const schoolEnum = pgEnum("school", schools);
 export const usersTable = pgTable("users", {
   userId: bigint("user_id", { mode: "number" }).notNull().primaryKey(),
   handle: varchar({ length: 255 }).notNull(),
-  email: varchar({ length: 255 }).notNull(),
+  // email: varchar({ length: 255 }).notNull(),
   school: schoolEnum(),
   joinDate: timestamp("join_date", {
     withTimezone: true,
   })
     .notNull()
     .defaultNow(),
-  verifiedAt: timestamp("verified_at", {
-    withTimezone: true,
-  }),
+  // verifiedAt: timestamp("verified_at", {
+  //   withTimezone: true,
+  // }),
 });
 
-export const emailVerificationCodesTable = pgTable("email_verification_codes", {
-  code: varchar({ length: 255 }).notNull(),
-  userId: bigint("user_id", { mode: "number" })
-    .primaryKey()
-    .references(() => usersTable.userId, { onDelete: "cascade" }),
-  requestedAt: timestamp("requested_at", {
-    withTimezone: true,
-  }).notNull(),
-  expiresAt: timestamp("expires_at", {
-    withTimezone: true,
-  }).notNull(),
-});
+// export const emailVerificationCodesTable = pgTable("email_verification_codes", {
+//   code: varchar({ length: 255 }).notNull(),
+//   userId: bigint("user_id", { mode: "number" })
+//     .primaryKey()
+//     .references(() => usersTable.userId, { onDelete: "cascade" }),
+//   requestedAt: timestamp("requested_at", {
+//     withTimezone: true,
+//   }).notNull(),
+//   expiresAt: timestamp("expires_at", {
+//     withTimezone: true,
+//   }).notNull(),
+// });
 
 export const swapperTable = pgTable(
   "swapper",

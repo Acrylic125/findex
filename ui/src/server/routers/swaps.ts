@@ -5,7 +5,6 @@ import { db } from "@/db";
 import {
   courseIndexTable,
   coursesTable,
-  emailVerificationCodesTable,
   swapperTable,
   swapperWantTable,
   usersTable,

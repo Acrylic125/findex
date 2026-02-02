@@ -4,7 +4,6 @@ import z from "zod";
 import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Field, FieldError, FieldLabel } from "./ui/field";
-import { Input } from "./ui/input";
 import {
   Combobox,
   ComboboxContent,
@@ -26,16 +25,18 @@ import { useRouter } from "next/navigation";
 const FormSchema = z.object({
   school: z.enum(schools, { message: "School is required" }),
   // Email must end in @e.ntu.edu.sg
-  email: z.email().refine((email) => email.endsWith("@e.ntu.edu.sg"), {
-    message: "Email must end in @e.ntu.edu.sg",
-  }),
+  // email: z.email().refine((email) => email.endsWith("@e.ntu.edu.sg"), {
+  //   message: "Email must end in @e.ntu.edu.sg",
+  // }),
 });
 
 export function OnboardForm() {
   const router = useRouter();
-  const verifyMut = trpc.onboard.verifyEmail.useMutation({
-    onSuccess: () => {
-      router.push("/onboard/verify");
+  const api = trpc.useUtils();
+  const onboardMut = trpc.onboard.onboard.useMutation({
+    onSuccess: (data) => {
+      api.user.verifySelf.setData(undefined, data.user);
+      router.push("/app");
     },
     onError: (error) => {},
   });
@@ -43,13 +44,13 @@ export function OnboardForm() {
     resolver: zodResolver(FormSchema),
     defaultValues: {
       school: schools[0],
-      email: "",
+      // email: "",
     },
   });
 
   function onSubmit(data: z.infer<typeof FormSchema>) {
     // Do something with the form values.
-    verifyMut.mutate(data);
+    onboardMut.mutate(data);
   }
 
   return (
@@ -89,35 +90,15 @@ export function OnboardForm() {
           </Field>
         )}
       />
-      <Controller
-        name="email"
-        control={form.control}
-        render={({ field, fieldState }) => (
-          <Field data-invalid={fieldState.invalid}>
-            <FieldLabel htmlFor="form-rhf-email">
-              What's your @e.ntu.edu.sg email?
-            </FieldLabel>
-            <Input
-              {...field}
-              id="form-rhf-email"
-              aria-invalid={fieldState.invalid}
-              placeholder="E.g. ABC001@e.ntu.edu.sg"
-              autoComplete="off"
-              className="h-10"
-            />
-            {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
-          </Field>
-        )}
-      />
       <div className="flex flex-col gap-2">
-        {verifyMut.error && (
+        {onboardMut.error && (
           <Alert variant="destructive">
             <AlertTitle>Error!</AlertTitle>
-            <AlertDescription>{verifyMut.error.message}</AlertDescription>
+            <AlertDescription>{onboardMut.error.message}</AlertDescription>
           </Alert>
         )}
 
-        {verifyMut.isSuccess && (
+        {onboardMut.isSuccess && (
           <Alert variant="default">
             <AlertTitle>Success!</AlertTitle>
             <AlertDescription>
@@ -130,9 +111,9 @@ export function OnboardForm() {
           <Button
             type="submit"
             className="h-10 w-fit"
-            disabled={verifyMut.isPending}
+            disabled={onboardMut.isPending || onboardMut.isSuccess}
           >
-            Verify Email
+            Done
           </Button>
         </div>
       </div>

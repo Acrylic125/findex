@@ -40,11 +40,14 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   return (
     <trpc.Provider client={trpcClient} queryClient={queryClient}>
-      <SessionProvider>
-        <QueryClientProvider client={queryClient}>
-          {children}
-        </QueryClientProvider>
-      </SessionProvider>
+      {/* <SessionProvider
+        basePath="/api/auth"
+        refetchInterval={5 * 60}
+        refetchOnWindowFocus={true}
+      >
+        
+      </SessionProvider> */}
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
     </trpc.Provider>
   );
 }

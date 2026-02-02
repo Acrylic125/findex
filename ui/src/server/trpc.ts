@@ -3,15 +3,12 @@ import { cache } from "react";
 import { isValid, parse } from "@tma.js/init-data-node";
 import { FetchCreateContextFnOptions } from "@trpc/server/adapters/fetch";
 import superjson from "superjson";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { usersTable } from "@/db/schema";
+import { eq } from "drizzle-orm";
+import { db } from "@/db";
 
 export const createTRPCContext = cache(
   async ({ req: request }: FetchCreateContextFnOptions) => {
-    const session = await getServerSession(authOptions);
-
-    console.log("session", session);
-
     /**
      * @see: https://trpc.io/docs/server/context
      */
@@ -35,6 +32,21 @@ export const createTRPCContext = cache(
         auth: null,
       };
     }
+
+    // Query the user from the database.
+    // const user = await db
+    //   .select({
+    //     userId: usersTable.userId,
+    //   })
+    //   .from(usersTable)
+    //   .where(eq(usersTable.userId, auth.user.id))
+    //   .limit(1);
+    // if (user.length === 0) {
+    //   return {
+    //     user: null,
+    //     auth: null,
+    //   };
+    // }
     return {
       user: auth.user,
       auth: auth,

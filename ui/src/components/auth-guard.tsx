@@ -45,16 +45,16 @@ export function AuthGuard({
       return;
     }
     // Onboarded, but not verified.
-    if (verified && !user.data?.verifiedAt) {
-      router.push("/onboard/verify");
-      return;
-    }
+    // if (verified && !user.data?.verifiedAt) {
+    //   router.push("/onboard/verify");
+    //   return;
+    // }
   }, [rawInitData, user.isError, router, user.data, verified]);
 
   return children;
 }
 
-export function Redirector({ children }: { children: React.ReactNode }) {
+export function Redirector({ children }: { children?: React.ReactNode }) {
   const user = trpc.user.verifySelf.useQuery();
   const router = useRouter();
 
@@ -68,10 +68,10 @@ export function Redirector({ children }: { children: React.ReactNode }) {
       return;
     }
     // Onboarded, but not verified.
-    if (!user.data?.verifiedAt) {
-      router.push("/onboard/verify");
-      return;
-    }
+    // if (!user.data?.verifiedAt) {
+    //   router.push("/onboard/verify");
+    //   return;
+    // }
 
     // Otherwise, we will redirect to the app page.
     router.push("/app");

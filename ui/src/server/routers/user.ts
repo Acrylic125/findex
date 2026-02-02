@@ -2,7 +2,7 @@ import z from "zod";
 import { createTRPCRouter, protectedProcedure, publicProcedure } from "../trpc";
 import { TRPCError } from "@trpc/server";
 import { db } from "@/db";
-import { emailVerificationCodesTable, usersTable } from "@/db/schema";
+import { usersTable } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { schools } from "@/lib/types";
 import { SendSmtpEmail } from "@getbrevo/brevo";
@@ -14,10 +14,10 @@ export const userRouter = createTRPCRouter({
       .select({
         userId: usersTable.userId,
         handle: usersTable.handle,
-        email: usersTable.email,
+        // email: usersTable.email,
         school: usersTable.school,
         joinDate: usersTable.joinDate,
-        verifiedAt: usersTable.verifiedAt,
+        // verifiedAt: usersTable.verifiedAt,
       })
       .from(usersTable)
       .where(eq(usersTable.userId, ctx.user.id))
