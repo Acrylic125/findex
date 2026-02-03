@@ -3,10 +3,7 @@ import { createTRPCRouter, publicProcedure } from "../trpc";
 import { TRPCError } from "@trpc/server";
 import { db } from "@/db";
 import { usersTable } from "@/db/schema";
-import { and, eq, gte, lte } from "drizzle-orm";
 import { schools } from "@/lib/types";
-import { SendSmtpEmail } from "@getbrevo/brevo";
-import { emailAPI } from "@/email/brevo";
 
 export const onboardRouter = createTRPCRouter({
   onboard: publicProcedure

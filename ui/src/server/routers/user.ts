@@ -1,12 +1,7 @@
-import z from "zod";
-import { createTRPCRouter, protectedProcedure, publicProcedure } from "../trpc";
-import { TRPCError } from "@trpc/server";
+import { createTRPCRouter, publicProcedure } from "../trpc";
 import { db } from "@/db";
 import { usersTable } from "@/db/schema";
 import { eq } from "drizzle-orm";
-import { schools } from "@/lib/types";
-import { SendSmtpEmail } from "@getbrevo/brevo";
-import { emailAPI } from "@/email/brevo";
 
 export const userRouter = createTRPCRouter({
   verifySelf: publicProcedure.query(async ({ ctx }) => {
