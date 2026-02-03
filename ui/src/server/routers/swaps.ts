@@ -196,8 +196,6 @@ export const swapsRouter = createTRPCRouter({
             courseCode: coursesTable.code,
             index: courseIndexTable.index,
             requestedAt: swapperWantTable.requestedAt,
-            // ay: coursesTable.ay,
-            // semester: coursesTable.semester,
           })
           .from(swapperWantTable)
           .innerJoin(

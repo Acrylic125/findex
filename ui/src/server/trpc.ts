@@ -17,12 +17,14 @@ export const createTRPCContext = cache(
       return {
         user: null,
         auth: null,
+        isOnboarded: false,
       };
     }
     if (!isValid(authorization, process.env.BOT_KEY!)) {
       return {
         user: null,
         auth: null,
+        isOnboarded: false,
       };
     }
     const auth = parse(authorization);
@@ -30,26 +32,29 @@ export const createTRPCContext = cache(
       return {
         user: null,
         auth: null,
+        isOnboarded: false,
       };
     }
 
     // Query the user from the database.
-    // const user = await db
-    //   .select({
-    //     userId: usersTable.userId,
-    //   })
-    //   .from(usersTable)
-    //   .where(eq(usersTable.userId, auth.user.id))
-    //   .limit(1);
-    // if (user.length === 0) {
-    //   return {
-    //     user: null,
-    //     auth: null,
-    //   };
-    // }
+    const user = await db
+      .select({
+        userId: usersTable.userId,
+      })
+      .from(usersTable)
+      .where(eq(usersTable.userId, auth.user.id))
+      .limit(1);
+    if (user.length === 0) {
+      return {
+        user: auth.user,
+        auth: auth,
+        isOnboarded: false,
+      };
+    }
     return {
       user: auth.user,
       auth: auth,
+      isOnboarded: true,
     };
   }
 );
@@ -61,7 +66,7 @@ const t = initTRPC.context<Context>().create({
 });
 
 const isAuthed = t.middleware(({ next, ctx }) => {
-  if (!(ctx.user && ctx.auth)) {
+  if (!(ctx.user && ctx.auth && ctx.isOnboarded)) {
     throw new TRPCError({ code: "UNAUTHORIZED" });
   }
   return next({

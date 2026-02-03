@@ -9,7 +9,10 @@ import { SendSmtpEmail } from "@getbrevo/brevo";
 import { emailAPI } from "@/email/brevo";
 
 export const userRouter = createTRPCRouter({
-  verifySelf: protectedProcedure.query(async ({ ctx }) => {
+  verifySelf: publicProcedure.query(async ({ ctx }) => {
+    if (!ctx.user) {
+      return null;
+    }
     const user = await db
       .select({
         userId: usersTable.userId,
