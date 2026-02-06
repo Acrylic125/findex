@@ -491,8 +491,25 @@ export const swapsRouter = createTRPCRouter({
         });
       }
 
+      const swap = await db
+        .select()
+        .from(swapperTable)
+        .where(
+          and(
+            eq(swapperTable.courseId, courseId),
+            eq(swapperTable.telegramUserId, otherSwapperId)
+          )
+        );
+
+      if (swap.length === 0) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Swap request not found, please report this!",
+        });
+      }
+
       await bot.sendMessage(
-        ctx.user.id,
+        otherSwapperId,
         `Requesting swap for ${courseId} ${otherSwapperId} ${decryptedId}`
         // `Requesting swap for ${input.courseId} ${input.index}`
       );
