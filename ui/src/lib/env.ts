@@ -5,6 +5,7 @@ export const env = createEnv({
   server: {
     DATABASE_URL: z.url(),
     BOT_KEY: z.string(),
+    ENCRYPTION_KEY: z.string(),
     // BREVO_API_KEY: z.string(),
   },
   clientPrefix: "NEXT_PUBLIC_",
@@ -12,6 +13,7 @@ export const env = createEnv({
   runtimeEnv: {
     DATABASE_URL: process.env.DATABASE_URL,
     BOT_KEY: process.env.BOT_KEY,
+    ENCRYPTION_KEY: process.env.ENCRYPTION_KEY,
     // BREVO_API_KEY: process.env.BREVO_API_KEY,
   },
 

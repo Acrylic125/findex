@@ -16,13 +16,14 @@ bot.on("message", async (msg) => {
   //     // Will fail in private chats — expected
   //   }
   //   bot.send
-  bot.sendMessage(chatId, "Click the button to open the web view:", {
+  bot.sendMessage(chatId, "Index swap with your fellow NTU students!", {
     reply_markup: {
       inline_keyboard: [
         [
           {
-            text: "Open Web View",
-            url: "t.me/Findex_ntu_bot/Findex",
+            text: "Start",
+            url: process.env.APP_URL,
+            // url: "t.me/Findex_ntu_bot/Findex",
           },
         ],
       ],

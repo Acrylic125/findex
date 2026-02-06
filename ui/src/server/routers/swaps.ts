@@ -12,6 +12,45 @@ import {
 import { and, count, eq, inArray, or, sql } from "drizzle-orm";
 import { CurrentAcadYear } from "@/lib/acad";
 import { alias } from "drizzle-orm/pg-core";
+import { bot } from "@/telegram/telegram";
+import crypto from "crypto";
+import { env } from "@/lib/env";
+
+const IV_LENGTH = 16;
+
+function getUserEncryptionSecret(userId: number) {
+  const key = crypto
+    .createHash("sha256")
+    .update(`${env.ENCRYPTION_KEY}-${userId}`)
+    .digest()
+    .subarray(0, 32);
+  return key;
+}
+
+function encryptId(userId: number, id: string): string {
+  const iv = crypto.randomBytes(IV_LENGTH);
+  const cipher = crypto.createCipheriv(
+    "aes-256-cbc",
+    getUserEncryptionSecret(userId),
+    iv
+  );
+  let encryptedId = cipher.update(id, "utf8", "hex");
+  encryptedId += cipher.final("hex");
+  // Prepend IV to encrypted data (IV is 16 bytes = 32 hex chars)
+  return iv.toString("hex") + encryptedId;
+}
+
+function decryptId(userId: number, encryptedId: string): string {
+  // Extract IV from the beginning (IV is 16 bytes = 32 hex chars)
+  const iv = Buffer.from(encryptedId.substring(0, IV_LENGTH * 2), "hex");
+  const encrypted = encryptedId.substring(IV_LENGTH * 2);
+  const decipher = crypto.createDecipheriv(
+    "aes-256-cbc",
+    getUserEncryptionSecret(userId),
+    iv
+  );
+  return decipher.update(encrypted, "hex", "utf8") + decipher.final("utf8");
+}
 
 const otherSwapper = alias(swapperTable, "other_swapper");
 
@@ -19,10 +58,13 @@ type MatchIndexResponse = {
   id: string;
   // Null if the user has never mark as match.
   // Username
-  by: string | null;
+  // by: string | null;
+  numberOfRequests: number;
   isPerfectMatch: boolean;
   index: string;
   requestedAt: Date;
+  isVerified: boolean;
+  status?: "pending" | "completed" | "cancelled";
 };
 
 export const swapsRouter = createTRPCRouter({
@@ -219,7 +261,7 @@ export const swapsRouter = createTRPCRouter({
         db
           .select({
             // id: swapperWantTable.id,
-            _id: sql<string>`${swapperWantTable.courseId}-${otherSwapper.telegramUserId}`,
+            _id: sql<string>`${swapperWantTable.courseId}::text || '-' || ${otherSwapper.telegramUserId}::text`,
             courseId: swapperWantTable.courseId,
             wantIndex: swapperWantTable.wantIndex,
             requestedAt: swapperWantTable.requestedAt,
@@ -231,10 +273,6 @@ export const swapsRouter = createTRPCRouter({
           .innerJoin(
             otherSwapper,
             eq(swapperWantTable.courseId, otherSwapper.courseId)
-            // and(
-            //   eq(swapperWantTable.courseId, otherSwapper.courseId),
-            // eq(swapperWantTable.telegramUserId, otherSwapper.telegramUserId)
-            // )
           )
           .innerJoin(
             usersTable,
@@ -254,10 +292,6 @@ export const swapsRouter = createTRPCRouter({
       ]
     );
 
-    // console.log("currentlyHave", currentlyHave);
-    // console.log("requests", requests);
-    // console.log("directPotentialMatches", directPotentialMatches);
-
     const currentlyHaveMap = new Map<number, string>(
       currentlyHave.map((item) => [item.courseId, item.index])
     );
@@ -276,19 +310,15 @@ export const swapsRouter = createTRPCRouter({
     // wants an index that I have.
     const otherSwapperWantMatches = await db
       .select({
-        _id: sql<string>`${swapperWantTable.courseId}-${otherSwapper.telegramUserId}`,
+        _id: sql<string>`${swapperWantTable.courseId}::text || '-' || ${otherSwapper.telegramUserId}::text`,
         courseId: swapperWantTable.courseId,
         // wantIndex: swapperWantTable.wantIndex,
       })
       .from(swapperWantTable)
       .where(
         and(
-          // inArray(
-          //   swapperWantTable.id,
-          //   directPotentialMatches.map((match) => match._id)
-          // ),
           inArray(
-            sql<string>`${swapperWantTable.courseId}-${swapperWantTable.telegramUserId}`,
+            sql<string>`${swapperWantTable.courseId}::text || '-' || ${swapperWantTable.telegramUserId}::text`,
             directPotentialMatches.map((match) => match._id)
           ),
           or(
@@ -324,48 +354,49 @@ export const swapsRouter = createTRPCRouter({
     for (const [courseId, matches] of Array.from(
       potentialMatchesMap.entries()
     )) {
-      const deduceBy = (match: (typeof matches)[number]) => {
-        return match.username;
-        // if (match.telegramUserId === ctx.user.id) {
-        //   return match.username;
-        // }
-        // return null;
-      };
-
       const otherSwapperWantMatches = otherSwapperWantMatchesMap.get(courseId);
       if (!otherSwapperWantMatches) {
         matchesMap.set(courseId, {
           perfectMatches: [],
-          otherMatches: matches.map((match) => ({
-            by: deduceBy(match),
-            isPerfectMatch: false,
-            id: match._id,
-            index: match.wantIndex,
-            requestedAt: match.requestedAt,
-          })),
+          otherMatches: matches.map((match) => {
+            const encryptedId = encryptId(ctx.user.id, match._id);
+            return {
+              numberOfRequests: 0,
+              isVerified: true,
+              isPerfectMatch: false,
+              id: encryptedId,
+              index: match.wantIndex,
+              requestedAt: match.requestedAt,
+            };
+          }),
         });
         continue;
       }
       const perfectMatches: MatchIndexResponse[] = [];
       const otherMatches: MatchIndexResponse[] = [];
       for (const match of matches) {
+        const encryptedId = encryptId(ctx.user.id, match._id);
         if (
           otherSwapperWantMatches.some(
             (otherMatch) => otherMatch._id === match._id
           )
         ) {
           perfectMatches.push({
-            by: deduceBy(match),
+            // by: deduceBy(match),
+            numberOfRequests: 0,
+            isVerified: true,
             isPerfectMatch: true,
-            id: match._id,
+            id: encryptedId,
             index: match.wantIndex,
             requestedAt: match.requestedAt,
           });
         } else {
           otherMatches.push({
-            by: deduceBy(match),
+            // by: deduceBy(match),
+            numberOfRequests: 0,
+            isVerified: true,
             isPerfectMatch: false,
-            id: match._id,
+            id: encryptedId,
             index: match.wantIndex,
             requestedAt: match.requestedAt,
           });
@@ -397,8 +428,6 @@ export const swapsRouter = createTRPCRouter({
               (a, b) => b.requestedAt.getTime() - a.requestedAt.getTime()
             ) ?? []),
           ];
-          // console.log("----");
-          // console.log(matches, matchesGrouped);
 
           acc[request.courseId] = {
             course: {
@@ -430,12 +459,43 @@ export const swapsRouter = createTRPCRouter({
           wantIndexes: { index: string; requestedAt: Date }[];
           matches: MatchIndexResponse[];
           hasMoreMatches: boolean;
-          // perfectMatches: MatchIndexResponse[];
-          // otherMatches: MatchIndexResponse[];
         }
       >
     );
 
     return Object.values(groupedRequests);
   }),
+  requestSwap: protectedProcedure
+    .input(
+      z.object({
+        id: z.string(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const decryptedId = decryptId(ctx.user.id, input.id);
+
+      const split = decryptedId.split("-");
+      if (split.length !== 2) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Invalid ID, please report this!",
+        });
+      }
+      const courseId = parseInt(split[0]);
+      const otherSwapperId = parseInt(split[1]);
+      if (isNaN(courseId) || isNaN(otherSwapperId)) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message:
+            "Invalid ID, course ID or other swapper ID is not valid, please report this!",
+        });
+      }
+
+      await bot.sendMessage(
+        ctx.user.id,
+        `Requesting swap for ${courseId} ${otherSwapperId} ${decryptedId}`
+        // `Requesting swap for ${input.courseId} ${input.index}`
+      );
+      return { success: true };
+    }),
 });

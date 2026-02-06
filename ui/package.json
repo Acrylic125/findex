@@ -38,6 +38,7 @@
     "next": "16.0.7",
     "next-auth": "^4.24.13",
     "next-intl": "^4.5.5",
+    "node-telegram-bot-api": "^0.67.0",
     "normalize.css": "^8.0.1",
     "postgres": "^3.4.8",
     "react": "^19",
@@ -54,6 +55,7 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.17",
     "@types/node": "^24",
+    "@types/node-telegram-bot-api": "^0.64.13",
     "@types/pg": "^8.16.0",
     "@types/react": "^19",
     "@types/react-dom": "^19",
