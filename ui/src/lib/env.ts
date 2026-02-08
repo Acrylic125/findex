@@ -6,6 +6,8 @@ export const env = createEnv({
     DATABASE_URL: z.url(),
     BOT_KEY: z.string(),
     ENCRYPTION_KEY: z.string(),
+    /** Used to verify webhook POSTs are from Telegram. Set the same value in setWebhook(..., { secret_token }). */
+    TELEGRAM_WEBHOOK_SECRET: z.string().min(1),
     // BREVO_API_KEY: z.string(),
   },
   clientPrefix: "NEXT_PUBLIC_",
@@ -14,6 +16,7 @@ export const env = createEnv({
     DATABASE_URL: process.env.DATABASE_URL,
     BOT_KEY: process.env.BOT_KEY,
     ENCRYPTION_KEY: process.env.ENCRYPTION_KEY,
+    TELEGRAM_WEBHOOK_SECRET: process.env.TELEGRAM_WEBHOOK_SECRET,
     // BREVO_API_KEY: process.env.BREVO_API_KEY,
   },
 

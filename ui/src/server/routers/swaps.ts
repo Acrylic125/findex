@@ -524,7 +524,7 @@ export const swapsRouter = createTRPCRouter({
             courseId: swapperTable.courseId,
             index: swapperTable.index,
             telegramUserId: swapperTable.telegramUserId,
-            isOpenToMatch: swapperTable.hasSwapped,
+            hasSwapped: swapperTable.hasSwapped,
           })
           .from(swapperTable)
           .where(
@@ -568,7 +568,7 @@ export const swapsRouter = createTRPCRouter({
       const otherSwapper = _otherSwapper[0];
 
       // Check if the other swapper is visible.
-      if (!otherSwapper.isOpenToMatch) {
+      if (otherSwapper.hasSwapped) {
         throw new TRPCError({
           code: "BAD_REQUEST",
           message: `The swapper is no longer looking to swap.`,
@@ -616,18 +616,25 @@ export const swapsRouter = createTRPCRouter({
         course.semester
       );
 
+      const swapper1 = Math.max(userId, otherSwapper.telegramUserId);
+      const swapper2 = Math.min(userId, otherSwapper.telegramUserId);
+      // callback_data max 64 bytes; format "a:courseId:swapper1:swapper2" / "s:..."
+      const acceptPayload = `a:${courseId}:${swapper1}:${swapper2}`;
+      const alreadySwappedPayload = `s:${courseId}:${swapper1}:${swapper2}`;
+
       await bot.sendMessage(
         otherSwapperId,
-        `*${escapeMarkdown(course.code)} ${escapeMarkdown(course.name)} Swap Request*\n@${escapeMarkdown(username)} wants to swap with you!\n \nThey have: [${escapeMarkdown(mySwapper.index)}](${myIndexUrl})\nYou have: [${escapeMarkdown(otherSwapper.index)}](${otherIndexUrl}).\n \nTo accept, click the "Accept" button below, and send them a message. We will notify them of your acceptance.`,
+        `*${escapeMarkdown(course.code)} ${escapeMarkdown(course.name)} Swap Request*\n@${escapeMarkdown(username)} wants to swap with you!\n \nThey have: [${escapeMarkdown(mySwapper.index)}](${myIndexUrl})\nYou have: [${escapeMarkdown(otherSwapper.index)}](${otherIndexUrl}).\n \nTap "Accept" to confirm the swap, or "Already Swapped" if you've swapped elsewhere.`,
         {
           parse_mode: "Markdown",
           disable_web_page_preview: true,
           reply_markup: {
             inline_keyboard: [
               [
+                { text: "Accept", callback_data: acceptPayload },
                 {
-                  text: "Start",
-                  url: "https://fstars.benapps.dev/",
+                  text: "Already Swapped",
+                  callback_data: alreadySwappedPayload,
                 },
               ],
             ],
