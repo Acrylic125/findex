@@ -1,4 +1,3 @@
-import { CourseSwapMatches } from "@/components/course-swaps";
 import { SwapRequestForm } from "@/components/swap-request";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -24,7 +23,7 @@ export default async function RequestPage({
   }>;
 }) {
   const { courseCode } = await params;
-  const _course = await db
+  const course = await db
     .select()
     .from(coursesTable)
     .where(
@@ -36,20 +35,48 @@ export default async function RequestPage({
     )
     .limit(1);
 
-  if (_course.length === 0) {
+  if (course.length === 0) {
     notFound();
   }
-  const course = _course[0];
-  const courseId = course.id;
+  const courseId = course[0].id;
 
-  const [numberOfSwappers] = await Promise.all([
-    db
-      .select({
-        count: count(),
-      })
-      .from(swapperTable)
-      .where(eq(swapperTable.courseId, courseId)),
-  ]);
+  const [courseIndexes, haveCounts, wantCounts, numberOfSwappers] =
+    await Promise.all([
+      db
+        .select()
+        .from(courseIndexTable)
+        .where(eq(courseIndexTable.courseId, courseId)),
+      db
+        .select({
+          index: swapperTable.index,
+          count: count(),
+        })
+        .from(swapperTable)
+        .where(eq(swapperTable.courseId, courseId))
+        .groupBy(swapperTable.index),
+      db
+        .select({
+          index: swapperWantTable.wantIndex,
+          count: count(),
+        })
+        .from(swapperWantTable)
+        .where(eq(swapperWantTable.courseId, courseId))
+        .groupBy(swapperWantTable.wantIndex),
+      db
+        .select({
+          count: count(),
+        })
+        .from(swapperTable)
+        .where(eq(swapperTable.courseId, courseId)),
+    ]);
+
+  const haveCountsMap = new Map<string, number>(
+    haveCounts.map((count) => [count.index, count.count])
+  );
+
+  const wantCountsMap = new Map<string, number>(
+    wantCounts.map((count) => [count.index, count.count])
+  );
 
   let swappersText = null;
   if (numberOfSwappers[0].count === 1) {
@@ -71,17 +98,20 @@ export default async function RequestPage({
                   </Link>
                 </Button>
                 <p className="text-xl font-bold">
-                  {course.code} {course.name}
+                  {course[0].code} {course[0].name}
                 </p>
                 {swappersText && (
                   <Badge variant="secondary">{swappersText}</Badge>
                 )}
               </div>
-
-              <CourseSwapMatches
+              <SwapRequestForm
+                courseIndexes={courseIndexes.map((index) => ({
+                  id: index.id,
+                  index: index.index,
+                  haveCount: haveCountsMap.get(index.index) ?? 0,
+                  wantCount: wantCountsMap.get(index.index) ?? 0,
+                }))}
                 courseId={courseId}
-                name={course.name}
-                code={course.code}
               />
             </div>
           </div>

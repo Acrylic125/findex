@@ -10,7 +10,7 @@ import {
   swapRequestsTable,
   usersTable,
 } from "@/db/schema";
-import { and, count, eq, inArray, or, sql } from "drizzle-orm";
+import { and, count, eq, inArray, ne, or, sql } from "drizzle-orm";
 import { CurrentAcadYear } from "@/lib/acad";
 import { alias } from "drizzle-orm/pg-core";
 import { bot } from "@/telegram/telegram";
@@ -237,79 +237,82 @@ export const swapsRouter = createTRPCRouter({
       };
     }),
   getAllRequests: protectedProcedure.query(async ({ ctx }) => {
-    const [currentlyHave, requests] = await Promise.all([
+    const [requests, matchCounts] = await Promise.all([
       db
         .select({
           courseId: swapperTable.courseId,
-          // index: swapperTable.index,
+          courseName: coursesTable.name,
+          courseCode: coursesTable.code,
         })
         .from(swapperTable)
+        .innerJoin(coursesTable, eq(swapperTable.courseId, coursesTable.id))
         .where(eq(swapperTable.telegramUserId, ctx.user.id)),
       db
         .select({
-          courseId: coursesTable.id,
-          courseName: coursesTable.name,
-          courseCode: coursesTable.code,
-          index: courseIndexTable.index,
-          requestedAt: swapperWantTable.requestedAt,
+          count: count(),
+          courseId: swapperWantTable.courseId,
         })
         .from(swapperWantTable)
+        // Other swapper
         .innerJoin(
-          courseIndexTable,
-          and(
-            eq(swapperWantTable.courseId, courseIndexTable.courseId),
-            eq(swapperWantTable.wantIndex, courseIndexTable.index)
-          )
+          otherSwapper,
+          eq(swapperWantTable.courseId, otherSwapper.courseId)
         )
-        .innerJoin(coursesTable, eq(courseIndexTable.courseId, coursesTable.id))
+        .innerJoin(
+          usersTable,
+          eq(otherSwapper.telegramUserId, usersTable.userId)
+        )
         .where(
           and(
+            // Wanted by me.
+            // eq(swapperWantTable.courseId, .courseId),
             eq(swapperWantTable.telegramUserId, ctx.user.id),
-            eq(coursesTable.ay, CurrentAcadYear.ay),
-            eq(coursesTable.semester, CurrentAcadYear.semester)
+            // The other swapper has the index I want.
+            // Whether or not the other swapper has the index I have will
+            // prioritised later.
+            eq(otherSwapper.index, swapperWantTable.wantIndex)
           )
-        ),
+        )
+        .groupBy(swapperWantTable.courseId),
     ]);
 
-    // return Object.values(groupedRequests);
+    const matchCountsMap = new Map<number, number>(
+      matchCounts.map((matchCount) => [matchCount.courseId, matchCount.count])
+    );
+
+    return requests.map((request) => ({
+      course: {
+        id: request.courseId,
+        code: request.courseCode,
+        name: request.courseName,
+      },
+      matchCount: matchCountsMap.get(request.courseId) ?? 0,
+    }));
   }),
-  getAllRequestsAndMatches: protectedProcedure.query(async ({ ctx }) => {
-    const [currentlyHave, requests, directPotentialMatches] = await Promise.all(
-      [
+  getCourseRequestAndMatches: protectedProcedure
+    .input(
+      z.object({
+        courseId: z.number(),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      const [_currentlyHave, directPotentialMatches] = await Promise.all([
         db
           .select({
             courseId: swapperTable.courseId,
             index: swapperTable.index,
+            isVisible: swapperTable.isVisible,
+            haveIndex: swapperTable.index,
           })
           .from(swapperTable)
-          .where(eq(swapperTable.telegramUserId, ctx.user.id)),
-        db
-          .select({
-            courseId: coursesTable.id,
-            courseName: coursesTable.name,
-            courseCode: coursesTable.code,
-            index: courseIndexTable.index,
-            requestedAt: swapperWantTable.requestedAt,
-          })
-          .from(swapperWantTable)
-          .innerJoin(
-            courseIndexTable,
-            and(
-              eq(swapperWantTable.courseId, courseIndexTable.courseId),
-              eq(swapperWantTable.wantIndex, courseIndexTable.index)
-            )
-          )
-          .innerJoin(
-            coursesTable,
-            eq(courseIndexTable.courseId, coursesTable.id)
-          )
+          .innerJoin(coursesTable, eq(swapperTable.courseId, coursesTable.id))
           .where(
             and(
-              eq(swapperWantTable.telegramUserId, ctx.user.id),
-              eq(coursesTable.ay, CurrentAcadYear.ay),
-              eq(coursesTable.semester, CurrentAcadYear.semester)
+              eq(swapperTable.telegramUserId, ctx.user.id),
+              eq(swapperTable.courseId, input.courseId)
             )
-          ),
+          )
+          .limit(1),
         db
           .select({
             // id: swapperWantTable.id,
@@ -318,7 +321,7 @@ export const swapsRouter = createTRPCRouter({
             wantIndex: swapperWantTable.wantIndex,
             requestedAt: swapperWantTable.requestedAt,
             telegramUserId: otherSwapper.telegramUserId,
-            username: usersTable.handle, // may not be up to date
+            // username: usersTable.handle, // may not be up to date
           })
           .from(swapperWantTable)
           // Other swapper
@@ -333,7 +336,7 @@ export const swapsRouter = createTRPCRouter({
           .where(
             and(
               // Wanted by me.
-              eq(swapperWantTable.courseId, otherSwapper.courseId),
+              eq(swapperWantTable.courseId, input.courseId),
               eq(swapperWantTable.telegramUserId, ctx.user.id),
               // The other swapper has the index I want.
               // Whether or not the other swapper has the index I have will
@@ -341,182 +344,100 @@ export const swapsRouter = createTRPCRouter({
               eq(otherSwapper.index, swapperWantTable.wantIndex)
             )
           ),
-      ]
-    );
+      ]);
 
-    const currentlyHaveMap = new Map<number, string>(
-      currentlyHave.map((item) => [item.courseId, item.index])
-    );
-    const potentialMatchesMap = new Map<
-      number,
-      (typeof directPotentialMatches)[number][]
-    >();
-    for (const match of directPotentialMatches) {
-      if (!potentialMatchesMap.has(match.courseId)) {
-        potentialMatchesMap.set(match.courseId, []);
-      }
-      potentialMatchesMap.get(match.courseId)!.push(match);
-    }
-
-    // Out of the potential matches, filter out the ones where the other swapper
-    // wants an index that I have.
-    const otherSwapperWantMatches = await db
-      .select({
-        _id: sql<string>`${swapperWantTable.courseId}::text || '-' || ${otherSwapper.telegramUserId}::text`,
-        courseId: swapperWantTable.courseId,
-        // wantIndex: swapperWantTable.wantIndex,
-      })
-      .from(swapperWantTable)
-      .where(
-        and(
-          inArray(
-            sql<string>`${swapperWantTable.courseId}::text || '-' || ${swapperWantTable.telegramUserId}::text`,
-            directPotentialMatches.map((match) => match._id)
-          ),
-          or(
-            ...Array.from(currentlyHaveMap.entries()).map(([courseId, index]) =>
-              and(
-                eq(swapperWantTable.courseId, courseId),
-                eq(swapperWantTable.wantIndex, index)
-              )
-            )
-          )
-        )
-      );
-    const otherSwapperWantMatchesMap = new Map<
-      number,
-      (typeof otherSwapperWantMatches)[number][]
-    >();
-    for (const match of otherSwapperWantMatches) {
-      if (!otherSwapperWantMatchesMap.has(match.courseId)) {
-        otherSwapperWantMatchesMap.set(match.courseId, []);
-      }
-      otherSwapperWantMatchesMap.get(match.courseId)!.push(match);
-    }
-
-    // Collate the matches.
-    const matchesMap = new Map<
-      number,
-      {
-        perfectMatches: MatchIndexResponse[];
-        otherMatches: MatchIndexResponse[];
-      }
-    >();
-
-    for (const [courseId, matches] of Array.from(
-      potentialMatchesMap.entries()
-    )) {
-      const otherSwapperWantMatches = otherSwapperWantMatchesMap.get(courseId);
-      if (!otherSwapperWantMatches) {
-        matchesMap.set(courseId, {
-          perfectMatches: [],
-          otherMatches: matches.map((match) => {
-            const encryptedId = encryptId(ctx.user.id, match._id);
-            return {
-              numberOfRequests: 0,
-              isVerified: true,
-              isPerfectMatch: false,
-              id: encryptedId,
-              index: match.wantIndex,
-              requestedAt: match.requestedAt,
-            };
-          }),
+      if (_currentlyHave.length === 0) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "You have not set your index for this course.",
         });
-        continue;
       }
+      const currentlyHave = _currentlyHave[0];
+      const haveIndex = currentlyHave.index;
+
+      // Among direct potential matches, find where the other swapper wants my index (perfect match).
+      const otherSwapperWantMatches = await db
+        .select({
+          _id: sql<string>`${swapperWantTable.courseId}::text || '-' || ${swapperWantTable.telegramUserId}::text`,
+          courseId: swapperWantTable.courseId,
+        })
+        .from(swapperWantTable)
+        .where(
+          and(
+            inArray(
+              sql<string>`${swapperWantTable.courseId}::text || '-' || ${swapperWantTable.telegramUserId}::text`,
+              directPotentialMatches.map((match) => match._id)
+            ),
+            eq(swapperWantTable.courseId, input.courseId),
+            eq(swapperWantTable.wantIndex, haveIndex)
+          )
+        );
+
+      const otherSwapperWantMatchIds = new Set(
+        otherSwapperWantMatches.map((m) => m._id)
+      );
+
       const perfectMatches: MatchIndexResponse[] = [];
       const otherMatches: MatchIndexResponse[] = [];
-      for (const match of matches) {
+
+      for (const match of directPotentialMatches) {
         const encryptedId = encryptId(ctx.user.id, match._id);
-        if (
-          otherSwapperWantMatches.some(
-            (otherMatch) => otherMatch._id === match._id
-          )
-        ) {
-          perfectMatches.push({
-            // by: deduceBy(match),
-            numberOfRequests: 0,
-            isVerified: true,
-            isPerfectMatch: true,
-            id: encryptedId,
-            index: match.wantIndex,
-            requestedAt: match.requestedAt,
-          });
+        const isPerfect = otherSwapperWantMatchIds.has(match._id);
+        const entry: MatchIndexResponse = {
+          numberOfRequests: 0,
+          isVerified: true,
+          isPerfectMatch: isPerfect,
+          id: encryptedId,
+          index: match.wantIndex,
+          requestedAt: match.requestedAt,
+        };
+        if (isPerfect) {
+          perfectMatches.push(entry);
         } else {
-          otherMatches.push({
-            // by: deduceBy(match),
-            numberOfRequests: 0,
-            isVerified: true,
-            isPerfectMatch: false,
-            id: encryptedId,
-            index: match.wantIndex,
-            requestedAt: match.requestedAt,
-          });
+          otherMatches.push(entry);
         }
       }
 
-      matchesMap.set(courseId, {
+      const sortByRequestedAt = (
+        a: MatchIndexResponse,
+        b: MatchIndexResponse
+      ) => b.requestedAt.getTime() - a.requestedAt.getTime();
+      perfectMatches.sort(sortByRequestedAt);
+      otherMatches.sort(sortByRequestedAt);
+
+      const matchesMap = new Map<
+        number,
+        {
+          perfectMatches: MatchIndexResponse[];
+          otherMatches: MatchIndexResponse[];
+        }
+      >();
+      matchesMap.set(input.courseId, {
         perfectMatches,
         otherMatches,
       });
-    }
 
-    // Group by course
-    const groupedRequests = requests.reduce(
-      (acc, request) => {
-        if (!acc[request.courseId]) {
-          const haveIndex = currentlyHaveMap.get(request.courseId);
-          // Skip if user does not have this course
-          if (!haveIndex) {
-            return acc;
-          }
-          const matchesGrouped = matchesMap.get(request.courseId);
+      const matches = [
+        ...(perfectMatches.sort(
+          (a, b) => b.requestedAt.getTime() - a.requestedAt.getTime()
+        ) ?? []),
+        ...(otherMatches.sort(
+          (a, b) => b.requestedAt.getTime() - a.requestedAt.getTime()
+        ) ?? []),
+      ];
+      const courseMatches = {
+        course: {
+          id: currentlyHave?.courseId,
+          haveIndex: haveIndex,
+          isVisible: currentlyHave?.isVisible,
+        },
+        wantIndexes: [],
+        matches: matches.slice(0, 5),
+        hasMoreMatches: matches.length > 5,
+      };
 
-          const matches = [
-            ...(matchesGrouped?.perfectMatches.sort(
-              (a, b) => b.requestedAt.getTime() - a.requestedAt.getTime()
-            ) ?? []),
-            ...(matchesGrouped?.otherMatches.sort(
-              (a, b) => b.requestedAt.getTime() - a.requestedAt.getTime()
-            ) ?? []),
-          ];
-
-          acc[request.courseId] = {
-            course: {
-              id: request.courseId,
-              code: request.courseCode,
-              name: request.courseName,
-              haveIndex: haveIndex,
-            },
-            wantIndexes: [],
-            matches: matches.slice(0, 5),
-            hasMoreMatches: matches.length > 5,
-          };
-        }
-        acc[request.courseId].wantIndexes.push({
-          index: request.index,
-          requestedAt: request.requestedAt,
-        });
-        return acc;
-      },
-      {} as Record<
-        number,
-        {
-          course: {
-            id: number;
-            code: string;
-            name: string;
-            haveIndex: string;
-          };
-          wantIndexes: { index: string; requestedAt: Date }[];
-          matches: MatchIndexResponse[];
-          hasMoreMatches: boolean;
-        }
-      >
-    );
-
-    return Object.values(groupedRequests);
-  }),
+      return courseMatches;
+    }),
   requestSwap: protectedProcedure
     .input(
       z.object({
