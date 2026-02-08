@@ -1,6 +1,6 @@
 import { db } from "@/db";
 import { coursesTable, swapperTable } from "@/db/schema";
-import { and, eq } from "drizzle-orm";
+import { and, eq, or } from "drizzle-orm";
 import { bot } from "@/telegram/telegram";
 
 function escapeMarkdown(text: string): string {
@@ -40,20 +40,23 @@ function parseSwapCallbackData(data: string): {
   };
 }
 
-/**
- * Handle swap button callback from Telegram. Secured by verifying the user who
- * clicked is one of the two swappers (swapper1 or swapper2).
- */
 export async function handleSwapCallback(
   callbackData: string,
-  fromTelegramUserId: number
+  from: {
+    id: number;
+    username: string;
+  }
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const parsed = parseSwapCallbackData(callbackData);
   if (!parsed) {
     return { ok: false, error: "Invalid callback data" };
   }
 
+  const fromTelegramUserId = from.id;
+
   const { action, courseId, swapper1, swapper2 } = parsed;
+  const thisSwapper = fromTelegramUserId === swapper1 ? swapper1 : swapper2;
+  const otherSwapper = fromTelegramUserId === swapper1 ? swapper2 : swapper1;
 
   // Security: only the two swappers involved in this request can act
   if (fromTelegramUserId !== swapper1 && fromTelegramUserId !== swapper2) {
@@ -80,25 +83,26 @@ export async function handleSwapCallback(
       .where(
         and(
           eq(swapperTable.courseId, courseId),
-          eq(swapperTable.telegramUserId, swapper1)
-        )
-      );
-    await db
-      .update(swapperTable)
-      .set({ hasSwapped: true })
-      .where(
-        and(
-          eq(swapperTable.courseId, courseId),
-          eq(swapperTable.telegramUserId, swapper2)
+          or(
+            eq(swapperTable.telegramUserId, thisSwapper),
+            eq(swapperTable.telegramUserId, otherSwapper)
+          )
         )
       );
 
-    const msg = `Swap confirmed for *${escapeMarkdown(courseLabel)}*. You're no longer open to swap for this course.`;
     await bot
-      .sendMessage(swapper1, msg, { parse_mode: "Markdown" })
+      .sendMessage(
+        thisSwapper,
+        `*Swap confirmed for ${escapeMarkdown(courseLabel)}*.\n@${escapeMarkdown(from.username)} has accepted your swap request, they may get in touch with you, please make sure your DMs are open.\n \nYour request for ${escapeMarkdown(courseLabel)} is now marked as "Swapped". If this falls through, consider re-enabling the swap request.`,
+        { parse_mode: "Markdown" }
+      )
       .catch(() => {});
     await bot
-      .sendMessage(swapper2, msg, { parse_mode: "Markdown" })
+      .sendMessage(
+        otherSwapper,
+        `*Successfully sent swap request*\nPlease message @${escapeMarkdown(from.username)} to proceed with the swap. We have reminded them to open their DMs.\n \nYour request for ${escapeMarkdown(courseLabel)} is now marked as "Swapped". If this falls through, consider re-enabling the swap request.`,
+        { parse_mode: "Markdown" }
+      )
       .catch(() => {});
   } else {
     // Already swapped: only the clicker's hasSwapped = true
@@ -112,15 +116,19 @@ export async function handleSwapCallback(
         )
       );
 
-    const otherUserId = fromTelegramUserId === swapper1 ? swapper2 : swapper1;
-    const msgToClicker = `You marked *${escapeMarkdown(courseLabel)}* as already swapped. You're no longer open to swap for this course.`;
-    const msgToOther = `The other party marked *${escapeMarkdown(courseLabel)}* as already swapped.`;
-
     await bot
-      .sendMessage(fromTelegramUserId, msgToClicker, { parse_mode: "Markdown" })
+      .sendMessage(
+        thisSwapper,
+        `*Marked ${escapeMarkdown(courseLabel)} as already swapped*.\nIf you still want to swap for this course, consider re-enabling the swap request.`,
+        { parse_mode: "Markdown" }
+      )
       .catch(() => {});
     await bot
-      .sendMessage(otherUserId, msgToOther, { parse_mode: "Markdown" })
+      .sendMessage(
+        otherSwapper,
+        `The other party marked *${escapeMarkdown(courseLabel)}* as already swapped.`,
+        { parse_mode: "Markdown" }
+      )
       .catch(() => {});
   }
 

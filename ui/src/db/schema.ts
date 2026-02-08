@@ -327,3 +327,11 @@ export const swapRequestsTable = pgTable(
     ),
   ]
 );
+
+// Used as a reference to track telegram webhook requests, to avoid duplicate requests.
+export const telegramWebhookRequestsTable = pgTable(
+  "telegram_webhook_requests",
+  {
+    id: serial().notNull().primaryKey(),
+  }
+);
