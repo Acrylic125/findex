@@ -246,7 +246,7 @@ export const swapperTable = pgTable(
       .notNull()
       .references(() => coursesTable.id, { onDelete: "cascade" }),
     index: varchar({ length: 32 }).notNull(),
-    isVisible: boolean().notNull().default(true),
+    hasSwapped: boolean().notNull().default(false),
   },
   (t) => [
     primaryKey({ columns: [t.telegramUserId, t.courseId] }),
@@ -308,7 +308,6 @@ export const swapRequestsTable = pgTable(
     swapper2: bigint("swapper2_telegram_user_id", {
       mode: "number",
     }).notNull(),
-    status: swapRequestStatusEnum().notNull().default("pending"),
     requestedAt: timestamp("requested_at", {
       withTimezone: true,
     })

@@ -37,11 +37,14 @@ import {
 import { Badge } from "./ui/badge";
 import { ScrollArea } from "./ui/scroll-area";
 import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
+import { useState } from "react";
+import { Checkbox } from "./ui/checkbox";
 
 export function SwapItemMatch({
   id,
   course,
   match,
+  disabled,
   className,
 }: {
   id: string;
@@ -50,9 +53,11 @@ export function SwapItemMatch({
     name: string;
   };
   match: inferRouterOutputs<AppRouter>["swaps"]["getCourseRequestAndMatches"]["matches"][number];
+  disabled?: boolean;
   className?: string;
 }) {
   const requestSwapMut = trpc.swaps.requestSwap.useMutation();
+  const [open, setOpen] = useState(false);
 
   let statusElement = null;
   if (match.status === "pending") {
@@ -78,7 +83,7 @@ export function SwapItemMatch({
   }
 
   return (
-    <Sheet>
+    <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger>
         <div
           key={match.id}
@@ -189,39 +194,6 @@ export function SwapItemMatch({
                 </Table>
               </div>
             </div>
-            {/* {(match.status === undefined || match.status === "pending") && (
-              <div className="flex flex-col gap-2">
-                <p>How it works</p>
-                <div className="flex flex-row gap-2 items-center text-sm bg-card border-border border rounded-md p-1">
-                  <div className="flex items-center justify-center w-5 h-5 rounded-sm bg-primary/10 text-xs">
-                    1
-                  </div>{" "}
-                  <p className="flex-1 text-muted-foreground">
-                    Click <span className="text-primary">Request Swap</span> to
-                    send a request.
-                  </p>
-                </div>
-                <div className="flex flex-row gap-2 text-sm bg-card border-border border rounded-md p-1">
-                  <div className="flex items-center justify-center w-5 h-5 rounded-sm bg-primary/10 text-xs">
-                    2
-                  </div>{" "}
-                  <p className="flex-1 text-muted-foreground">
-                    They will receive the request. If they accept, your current
-                    request will be marked as{" "}
-                    <span className="text-primary">Completed</span>.
-                  </p>
-                </div>
-                <div className="flex flex-row gap-2 text-sm bg-card border-border border rounded-md p-1">
-                  <div className="flex items-center justify-center w-5 h-5 rounded-sm bg-primary/10 text-xs">
-                    3
-                  </div>{" "}
-                  <p className="flex-1 text-muted-foreground">
-                    They will reach out to you to confirm the swap.{" "}
-                    <span className="text-primary">Keep your DMs open</span>.
-                  </p>
-                </div>
-              </div>
-            )} */}
           </div>
         </div>
         <SheetFooter className="flex flex-col gap-4 border-t border-border">
@@ -244,13 +216,17 @@ export function SwapItemMatch({
             </Alert>
           )}
           <div className="flex flex-row gap-2 pb-8">
-            <Button className="flex-1" variant="outline">
+            <Button
+              className="flex-1"
+              variant="outline"
+              onClick={() => setOpen(false)}
+            >
               Cancel
             </Button>
             <Button
               className="flex-1"
-              onClick={() => requestSwapMut.mutate({ id })}
-              disabled={requestSwapMut.isPending}
+              onClick={() => !disabled && requestSwapMut.mutate({ id })}
+              disabled={requestSwapMut.isPending || disabled}
             >
               {requestSwapMut.isPending && (
                 <Loader2 className="text-primary size-4 animate-spin" />
@@ -273,14 +249,31 @@ export function CourseSwapMatches({
   name: string;
   code: string;
 }) {
+  const api = trpc.useUtils();
   const requestsQuery = trpc.swaps.getCourseRequestAndMatches.useQuery({
     courseId,
+  });
+  const toggleSwapRequestMut = trpc.swaps.toggleSwapRequest.useMutation({
+    onSuccess: (data) => {
+      // On success, set the new state to the query data.
+      api.swaps.getCourseRequestAndMatches.setData({ courseId }, (old) => {
+        if (!old) return old;
+        return {
+          ...old,
+          course: {
+            ...old.course,
+            hasSwapped: data.toggledTo,
+          },
+        };
+      });
+    },
   });
 
   let matchesElement = null;
   if (requestsQuery.error || requestsQuery.isLoading) {
     matchesElement = <Skeleton className="h-48 w-full" />;
   } else if (requestsQuery.data && requestsQuery.data.matches.length > 0) {
+    const disabled = requestsQuery.data.course.hasSwapped;
     matchesElement = (
       <div className="w-full flex flex-col bg-card border border-border rounded-md py-1 text-sm">
         {requestsQuery.data?.matches.map((match, index) => (
@@ -290,15 +283,17 @@ export function CourseSwapMatches({
             course={{
               id: requestsQuery.data.course.id,
               haveIndex: requestsQuery.data.course.haveIndex,
-              isVisible: requestsQuery.data.course.isVisible,
+              hasSwapped: requestsQuery.data.course.hasSwapped,
               code,
               name,
             }}
             match={match}
             className={cn({
+              "opacity-50": disabled,
               "border-b border-border":
                 index !== requestsQuery.data.matches.length - 1,
             })}
+            disabled={disabled}
           />
         ))}
       </div>
@@ -368,7 +363,37 @@ export function CourseSwapMatches({
         {yourRequestElement}
       </div>
       <div className="flex flex-col gap-2">
-        <h2 className="text-base font-bold">Matches</h2>
+        <div className="flex flex-row gap-2 items-center justify-between">
+          <h2 className="text-base font-bold">Matches</h2>
+          {requestsQuery.data && (
+            <div className="flex flex-row gap-2 items-center">
+              <p className="text-sm text-muted-foreground">Have Swapped?</p>
+              <Checkbox
+                className="size-5"
+                checked={requestsQuery.data?.course.hasSwapped}
+                onCheckedChange={() => {
+                  toggleSwapRequestMut.mutate({
+                    courseId,
+                    hasSwapped: !requestsQuery.data?.course.hasSwapped,
+                  });
+                }}
+                disabled={toggleSwapRequestMut.isPending}
+              />
+            </div>
+          )}
+        </div>
+        {requestsQuery.data !== undefined &&
+          requestsQuery.data?.course.hasSwapped && (
+            <div className="text-sm text-muted-foreground border border-border rounded-md p-2 bg-card">
+              <h2 className="text-foreground">
+                You already found a swap for this course.
+              </h2>
+              <p className="text-muted-foreground">
+                Keep this disabled if you{"'"}ve already found a match to avoid
+                receiving swap requests.
+              </p>
+            </div>
+          )}
         {matchesElement}
       </div>
     </div>

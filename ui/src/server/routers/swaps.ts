@@ -111,7 +111,7 @@ export const swapsRouter = createTRPCRouter({
       z.object({
         courseId: z.number(),
         haveIndex: z.string(),
-        wantIndexes: z.array(z.string()).min(1).max(16),
+        wantIndexes: z.array(z.string()).min(0).max(16),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -121,6 +121,7 @@ export const swapsRouter = createTRPCRouter({
           courseCode: coursesTable.code,
         })
         .from(swapperWantTable)
+        .innerJoin(coursesTable, eq(swapperWantTable.courseId, coursesTable.id))
         .where(
           and(
             eq(swapperWantTable.telegramUserId, ctx.user.id),
@@ -176,8 +177,15 @@ export const swapsRouter = createTRPCRouter({
           );
         }
       });
+
+      const [course] = await db
+        .select({ code: coursesTable.code })
+        .from(coursesTable)
+        .where(eq(coursesTable.id, input.courseId))
+        .limit(1);
+
       return {
-        courseCode: coursesTable.code,
+        courseCode: course?.code ?? null,
         success: true,
       };
     }),
@@ -245,6 +253,7 @@ export const swapsRouter = createTRPCRouter({
           courseId: swapperTable.courseId,
           courseName: coursesTable.name,
           courseCode: coursesTable.code,
+          isOpenToMatch: swapperTable.hasSwapped,
         })
         .from(swapperTable)
         .innerJoin(coursesTable, eq(swapperTable.courseId, coursesTable.id))
@@ -266,6 +275,7 @@ export const swapsRouter = createTRPCRouter({
         )
         .where(
           and(
+            eq(otherSwapper.hasSwapped, true),
             // Wanted by me.
             // eq(swapperWantTable.courseId, .courseId),
             eq(swapperWantTable.telegramUserId, ctx.user.id),
@@ -288,6 +298,7 @@ export const swapsRouter = createTRPCRouter({
         code: request.courseCode,
         name: request.courseName,
       },
+      isOpenToMatch: request.isOpenToMatch,
       matchCount: matchCountsMap.get(request.courseId) ?? 0,
     }));
   }),
@@ -304,7 +315,7 @@ export const swapsRouter = createTRPCRouter({
             .select({
               courseId: swapperTable.courseId,
               index: swapperTable.index,
-              isVisible: swapperTable.isVisible,
+              hasSwapped: swapperTable.hasSwapped,
               haveIndex: swapperTable.index,
             })
             .from(swapperTable)
@@ -441,9 +452,9 @@ export const swapsRouter = createTRPCRouter({
       ];
       const courseMatches = {
         course: {
-          id: currentlyHave?.courseId,
+          id: currentlyHave.courseId,
           haveIndex: haveIndex,
-          isVisible: currentlyHave?.isVisible,
+          hasSwapped: currentlyHave.hasSwapped,
         },
         wantIndexes: wantIndexes.map((index) => index.wantIndex),
         matches: matches.slice(0, 5),
@@ -451,6 +462,25 @@ export const swapsRouter = createTRPCRouter({
       };
 
       return courseMatches;
+    }),
+  toggleSwapRequest: protectedProcedure
+    .input(
+      z.object({
+        courseId: z.number(),
+        hasSwapped: z.boolean(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      await db
+        .update(swapperTable)
+        .set({ hasSwapped: input.hasSwapped })
+        .where(
+          and(
+            eq(swapperTable.courseId, input.courseId),
+            eq(swapperTable.telegramUserId, ctx.user.id)
+          )
+        );
+      return { success: true, toggledTo: input.hasSwapped };
     }),
   requestSwap: protectedProcedure
     .input(
@@ -488,63 +518,46 @@ export const swapsRouter = createTRPCRouter({
         });
       }
 
-      const [_otherSwapper, completedMatches, _course, _mySwapper] =
-        await Promise.all([
-          db
-            .select({
-              courseId: swapperTable.courseId,
-              index: swapperTable.index,
-              telegramUserId: swapperTable.telegramUserId,
-              isVisible: swapperTable.isVisible,
-            })
-            .from(swapperTable)
-            .where(
-              and(
-                eq(swapperTable.courseId, courseId),
-                eq(swapperTable.telegramUserId, otherSwapperId)
-              )
+      const [_otherSwapper, _course, _mySwapper] = await Promise.all([
+        db
+          .select({
+            courseId: swapperTable.courseId,
+            index: swapperTable.index,
+            telegramUserId: swapperTable.telegramUserId,
+            isOpenToMatch: swapperTable.hasSwapped,
+          })
+          .from(swapperTable)
+          .where(
+            and(
+              eq(swapperTable.courseId, courseId),
+              eq(swapperTable.telegramUserId, otherSwapperId)
             )
-            .limit(1),
-          db
-            .select({
-              status: swapRequestsTable.status,
-            })
-            .from(swapRequestsTable)
-            .where(
-              and(
-                eq(swapRequestsTable.courseId, courseId),
-                or(
-                  eq(swapRequestsTable.swapper1, otherSwapperId),
-                  eq(swapRequestsTable.swapper2, otherSwapperId)
-                ),
-                eq(swapRequestsTable.status, "completed")
-              )
+          )
+          .limit(1),
+        db
+          .select({
+            id: coursesTable.id,
+            code: coursesTable.code,
+            name: coursesTable.name,
+            ay: coursesTable.ay,
+            semester: coursesTable.semester,
+          })
+          .from(coursesTable)
+          .where(eq(coursesTable.id, courseId))
+          .limit(1),
+        db
+          .select({
+            index: swapperTable.index,
+          })
+          .from(swapperTable)
+          .where(
+            and(
+              eq(swapperTable.telegramUserId, userId),
+              eq(swapperTable.courseId, courseId)
             )
-            .limit(1),
-          db
-            .select({
-              id: coursesTable.id,
-              code: coursesTable.code,
-              name: coursesTable.name,
-              ay: coursesTable.ay,
-              semester: coursesTable.semester,
-            })
-            .from(coursesTable)
-            .where(eq(coursesTable.id, courseId))
-            .limit(1),
-          db
-            .select({
-              index: swapperTable.index,
-            })
-            .from(swapperTable)
-            .where(
-              and(
-                eq(swapperTable.telegramUserId, userId),
-                eq(swapperTable.courseId, courseId)
-              )
-            )
-            .limit(1),
-        ]);
+          )
+          .limit(1),
+      ]);
 
       if (_otherSwapper.length === 0) {
         throw new TRPCError({
@@ -555,7 +568,7 @@ export const swapsRouter = createTRPCRouter({
       const otherSwapper = _otherSwapper[0];
 
       // Check if the other swapper is visible.
-      if (!otherSwapper.isVisible || completedMatches.length > 0) {
+      if (!otherSwapper.isOpenToMatch) {
         throw new TRPCError({
           code: "BAD_REQUEST",
           message: `The swapper is no longer looking to swap.`,
@@ -585,7 +598,7 @@ export const swapsRouter = createTRPCRouter({
           swapper1: Math.max(userId, otherSwapper.telegramUserId),
           swapper2: Math.min(userId, otherSwapper.telegramUserId),
           courseId: courseId,
-          status: "pending",
+          // status: "pending",
           requestedAt: new Date(),
         })
         .onConflictDoNothing();

@@ -266,9 +266,9 @@ const SwapRequestFormSchema = z.object({
   }),
   wantIndexIds: z
     .array(z.number())
-    .min(1, {
-      message: "Please select at least one course index you want.",
-    })
+    // .min(1, {
+    //   message: "Please select at least one course index you want.",
+    // })
     .max(16),
 });
 
