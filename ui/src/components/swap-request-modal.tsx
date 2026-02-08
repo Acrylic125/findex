@@ -232,7 +232,7 @@ export function SwapRequestModal({ courses }: { courses: Course[] }) {
           onChange={(course) => {
             setCourse(course);
             setOpen(false);
-            router.push(`/app/swap/${course.code}`);
+            router.push(`/app/swap/${course.code}/edit`);
           }}
           courses={courses}
         />

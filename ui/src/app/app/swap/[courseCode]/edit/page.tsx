@@ -17,12 +17,17 @@ import { notFound } from "next/navigation";
 
 export default async function RequestPage({
   params,
+  searchParams,
 }: {
   params: Promise<{
     courseCode: string;
   }>;
+  searchParams: Promise<{
+    backTo?: string;
+  }>;
 }) {
   const { courseCode } = await params;
+  const { backTo } = await searchParams;
   const course = await db
     .select()
     .from(coursesTable)
@@ -93,7 +98,10 @@ export default async function RequestPage({
             <div className="flex flex-col gap-8">
               <div className="flex flex-col gap-2">
                 <Button variant="link" className="w-fit px-0">
-                  <Link href="/app" className="flex items-center gap-0.5">
+                  <Link
+                    href={backTo ?? "/app"}
+                    className="flex items-center gap-0.5"
+                  >
                     <ArrowLeft className="size-4" /> Back
                   </Link>
                 </Button>

@@ -280,6 +280,7 @@ export function SwapRequestForm({
   courseId: number;
 }) {
   const api = trpc.useUtils();
+  const router = useRouter();
   const form = useForm<z.infer<typeof SwapRequestFormSchema>>({
     resolver: zodResolver(SwapRequestFormSchema),
     defaultValues: async () => {
@@ -295,9 +296,11 @@ export function SwapRequestForm({
   });
 
   const setRequestMut = trpc.swaps.setRequest.useMutation({
-    onSuccess: () => {
-      api.swaps.getCourseRequestAndMatches.invalidate();
+    onSuccess: (data) => {
+      api.swaps.getCourseRequestAndMatches.invalidate({ courseId });
       api.swaps.getRequestForCourse.invalidate({ courseId });
+      api.swaps.getAllRequests.invalidate();
+      router.push(`/app/swap/${data.courseCode}`);
     },
   });
 

@@ -118,6 +118,7 @@ export const swapsRouter = createTRPCRouter({
       const currentWantIndexes = await db
         .select({
           index: swapperWantTable.wantIndex,
+          courseCode: coursesTable.code,
         })
         .from(swapperWantTable)
         .where(
@@ -176,6 +177,7 @@ export const swapsRouter = createTRPCRouter({
         }
       });
       return {
+        courseCode: coursesTable.code,
         success: true,
       };
     }),
@@ -296,55 +298,67 @@ export const swapsRouter = createTRPCRouter({
       })
     )
     .query(async ({ ctx, input }) => {
-      const [_currentlyHave, directPotentialMatches] = await Promise.all([
-        db
-          .select({
-            courseId: swapperTable.courseId,
-            index: swapperTable.index,
-            isVisible: swapperTable.isVisible,
-            haveIndex: swapperTable.index,
-          })
-          .from(swapperTable)
-          .innerJoin(coursesTable, eq(swapperTable.courseId, coursesTable.id))
-          .where(
-            and(
-              eq(swapperTable.telegramUserId, ctx.user.id),
-              eq(swapperTable.courseId, input.courseId)
+      const [_currentlyHave, directPotentialMatches, wantIndexes] =
+        await Promise.all([
+          db
+            .select({
+              courseId: swapperTable.courseId,
+              index: swapperTable.index,
+              isVisible: swapperTable.isVisible,
+              haveIndex: swapperTable.index,
+            })
+            .from(swapperTable)
+            .innerJoin(coursesTable, eq(swapperTable.courseId, coursesTable.id))
+            .where(
+              and(
+                eq(swapperTable.telegramUserId, ctx.user.id),
+                eq(swapperTable.courseId, input.courseId)
+              )
             )
-          )
-          .limit(1),
-        db
-          .select({
-            // id: swapperWantTable.id,
-            _id: sql<string>`${swapperWantTable.courseId}::text || '-' || ${otherSwapper.telegramUserId}::text`,
-            courseId: swapperWantTable.courseId,
-            wantIndex: swapperWantTable.wantIndex,
-            requestedAt: swapperWantTable.requestedAt,
-            telegramUserId: otherSwapper.telegramUserId,
-            // username: usersTable.handle, // may not be up to date
-          })
-          .from(swapperWantTable)
-          // Other swapper
-          .innerJoin(
-            otherSwapper,
-            eq(swapperWantTable.courseId, otherSwapper.courseId)
-          )
-          .innerJoin(
-            usersTable,
-            eq(otherSwapper.telegramUserId, usersTable.userId)
-          )
-          .where(
-            and(
-              // Wanted by me.
-              eq(swapperWantTable.courseId, input.courseId),
-              eq(swapperWantTable.telegramUserId, ctx.user.id),
-              // The other swapper has the index I want.
-              // Whether or not the other swapper has the index I have will
-              // prioritised later.
-              eq(otherSwapper.index, swapperWantTable.wantIndex)
+            .limit(1),
+          db
+            .select({
+              // id: swapperWantTable.id,
+              _id: sql<string>`${swapperWantTable.courseId}::text || '-' || ${otherSwapper.telegramUserId}::text`,
+              courseId: swapperWantTable.courseId,
+              wantIndex: swapperWantTable.wantIndex,
+              requestedAt: swapperWantTable.requestedAt,
+              telegramUserId: otherSwapper.telegramUserId,
+              // username: usersTable.handle, // may not be up to date
+            })
+            .from(swapperWantTable)
+            // Other swapper
+            .innerJoin(
+              otherSwapper,
+              eq(swapperWantTable.courseId, otherSwapper.courseId)
             )
-          ),
-      ]);
+            .innerJoin(
+              usersTable,
+              eq(otherSwapper.telegramUserId, usersTable.userId)
+            )
+            .where(
+              and(
+                // Wanted by me.
+                eq(swapperWantTable.courseId, input.courseId),
+                eq(swapperWantTable.telegramUserId, ctx.user.id),
+                // The other swapper has the index I want.
+                // Whether or not the other swapper has the index I have will
+                // prioritised later.
+                eq(otherSwapper.index, swapperWantTable.wantIndex)
+              )
+            ),
+          db
+            .select({
+              wantIndex: swapperWantTable.wantIndex,
+            })
+            .from(swapperWantTable)
+            .where(
+              and(
+                eq(swapperWantTable.courseId, input.courseId),
+                eq(swapperWantTable.telegramUserId, ctx.user.id)
+              )
+            ),
+        ]);
 
       if (_currentlyHave.length === 0) {
         throw new TRPCError({
@@ -431,7 +445,7 @@ export const swapsRouter = createTRPCRouter({
           haveIndex: haveIndex,
           isVisible: currentlyHave?.isVisible,
         },
-        wantIndexes: [],
+        wantIndexes: wantIndexes.map((index) => index.wantIndex),
         matches: matches.slice(0, 5),
         hasMoreMatches: matches.length > 5,
       };
