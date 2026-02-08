@@ -36,6 +36,11 @@ ALTER TABLE index_requests ENABLE ROW LEVEL SECURITY;
 ALTER TABLE course_index_request_settled ENABLE ROW LEVEL SECURITY;
  */
 
+export const swapRequestStatusEnum = pgEnum("request_status", [
+  "pending",
+  "completed",
+]);
+
 export const tsvector = customType<{
   data: string;
 }>({
@@ -231,23 +236,7 @@ export const usersTable = pgTable("users", {
   })
     .notNull()
     .defaultNow(),
-  // verifiedAt: timestamp("verified_at", {
-  //   withTimezone: true,
-  // }),
 });
-
-// export const emailVerificationCodesTable = pgTable("email_verification_codes", {
-//   code: varchar({ length: 255 }).notNull(),
-//   userId: bigint("user_id", { mode: "number" })
-//     .primaryKey()
-//     .references(() => usersTable.userId, { onDelete: "cascade" }),
-//   requestedAt: timestamp("requested_at", {
-//     withTimezone: true,
-//   }).notNull(),
-//   expiresAt: timestamp("expires_at", {
-//     withTimezone: true,
-//   }).notNull(),
-// });
 
 export const swapperTable = pgTable(
   "swapper",
@@ -257,6 +246,7 @@ export const swapperTable = pgTable(
       .notNull()
       .references(() => coursesTable.id, { onDelete: "cascade" }),
     index: varchar({ length: 32 }).notNull(),
+    isVisible: boolean().notNull().default(true),
   },
   (t) => [
     primaryKey({ columns: [t.telegramUserId, t.courseId] }),
@@ -264,39 +254,6 @@ export const swapperTable = pgTable(
       columns: [t.courseId, t.index],
       foreignColumns: [courseIndexTable.courseId, courseIndexTable.index],
       name: "fk_swapper_courseId_index",
-    }).onDelete("cascade"),
-  ]
-);
-
-export const swapperMatchTable = pgTable(
-  "swapper_matches",
-  {
-    telegramUserId: bigint("telegram_user_id", { mode: "number" }).notNull(),
-    courseId: integer("course_id")
-      .notNull()
-      .references(() => coursesTable.id, { onDelete: "cascade" }),
-    matchTelegramUserId: bigint("match_telegram_user_id", {
-      mode: "number",
-    }).notNull(),
-    matchedOn: timestamp("matched_on", {
-      withTimezone: true,
-    })
-      .notNull()
-      .defaultNow(),
-  },
-  (t) => [
-    primaryKey({
-      columns: [t.telegramUserId, t.courseId],
-    }),
-    foreignKey({
-      columns: [t.telegramUserId, t.courseId],
-      foreignColumns: [swapperTable.telegramUserId, swapperTable.courseId],
-      name: "fk_swapper_matches_telegramUserId_courseId",
-    }).onDelete("cascade"),
-    foreignKey({
-      columns: [t.matchTelegramUserId, t.courseId],
-      foreignColumns: [swapperTable.telegramUserId, swapperTable.courseId],
-      name: "fk_swapper_matches_matchTelegramUserId_courseId",
     }).onDelete("cascade"),
   ]
 );
@@ -336,17 +293,38 @@ export const swapperWantTable = pgTable(
   ]
 );
 
-export const courseIndexRequestSettledTable = pgTable(
-  "course_index_request_settled",
+export const swapRequestsTable = pgTable(
+  "swap_requests",
   {
-    id: serial().notNull().primaryKey(),
-    courseIndexId: integer()
+    // courseIndexId: integer()
+    //   .notNull()
+    //   .references(() => courseIndexTable.id, { onDelete: "cascade" }),
+    courseId: integer("course_id")
       .notNull()
-      .references(() => courseIndexTable.id, { onDelete: "cascade" }),
-    settledAt: timestamp("settled_at", {
+      .references(() => coursesTable.id, { onDelete: "cascade" }),
+    swapper1: bigint("swapper1_telegram_user_id", {
+      mode: "number",
+    }).notNull(),
+    swapper2: bigint("swapper2_telegram_user_id", {
+      mode: "number",
+    }).notNull(),
+    status: swapRequestStatusEnum().notNull().default("pending"),
+    requestedAt: timestamp("requested_at", {
       withTimezone: true,
     })
       .notNull()
       .defaultNow(),
-  }
+  },
+  (t) => [
+    primaryKey({
+      columns: [t.swapper1, t.swapper2, t.courseId],
+    }),
+    // check("check_swapper1_not_equal_swapper2", sql`swapper1 != swapper2`),
+    // Check swapper1 id >= swapper2 id.
+    // This is to prevent duplicate requests for the same swapper pair.
+    check(
+      "check_swapper1_id_greater_than_swapper2_id",
+      sql`${t.swapper1} >= ${t.swapper2}`
+    ),
+  ]
 );

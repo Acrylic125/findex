@@ -7,6 +7,7 @@ import {
   coursesTable,
   swapperTable,
   swapperWantTable,
+  swapRequestsTable,
   usersTable,
 } from "@/db/schema";
 import { and, count, eq, inArray, or, sql } from "drizzle-orm";
@@ -17,6 +18,20 @@ import crypto from "crypto";
 import { env } from "@/lib/env";
 
 const IV_LENGTH = 16;
+
+function escapeMarkdown(text: string): string {
+  // Escape special characters for Telegram Markdown parse mode
+  return text.replace(/([_*`[\]()~])/g, "\\$1");
+}
+
+function buildFStarsUrl(
+  courseCode: string,
+  index: string,
+  ay: string,
+  semester: string
+): string {
+  return `https://fstars.benapps.dev/preview?ay=${encodeURIComponent(ay)}&s=${encodeURIComponent(semester)}&c=${encodeURIComponent(courseCode)}:${encodeURIComponent(index)}`;
+}
 
 function getUserEncryptionSecret(userId: number) {
   const key = crypto
@@ -221,6 +236,43 @@ export const swapsRouter = createTRPCRouter({
         })),
       };
     }),
+  getAllRequests: protectedProcedure.query(async ({ ctx }) => {
+    const [currentlyHave, requests] = await Promise.all([
+      db
+        .select({
+          courseId: swapperTable.courseId,
+          // index: swapperTable.index,
+        })
+        .from(swapperTable)
+        .where(eq(swapperTable.telegramUserId, ctx.user.id)),
+      db
+        .select({
+          courseId: coursesTable.id,
+          courseName: coursesTable.name,
+          courseCode: coursesTable.code,
+          index: courseIndexTable.index,
+          requestedAt: swapperWantTable.requestedAt,
+        })
+        .from(swapperWantTable)
+        .innerJoin(
+          courseIndexTable,
+          and(
+            eq(swapperWantTable.courseId, courseIndexTable.courseId),
+            eq(swapperWantTable.wantIndex, courseIndexTable.index)
+          )
+        )
+        .innerJoin(coursesTable, eq(courseIndexTable.courseId, coursesTable.id))
+        .where(
+          and(
+            eq(swapperWantTable.telegramUserId, ctx.user.id),
+            eq(coursesTable.ay, CurrentAcadYear.ay),
+            eq(coursesTable.semester, CurrentAcadYear.semester)
+          )
+        ),
+    ]);
+
+    // return Object.values(groupedRequests);
+  }),
   getAllRequestsAndMatches: protectedProcedure.query(async ({ ctx }) => {
     const [currentlyHave, requests, directPotentialMatches] = await Promise.all(
       [
@@ -472,6 +524,16 @@ export const swapsRouter = createTRPCRouter({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      const username = ctx.user.username;
+      const userId = ctx.user.id;
+      if (!username) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message:
+            "Your username is not set, please set one under your Telegram settings.",
+        });
+      }
+
       const decryptedId = decryptId(ctx.user.id, input.id);
 
       const split = decryptedId.split("-");
@@ -491,27 +553,138 @@ export const swapsRouter = createTRPCRouter({
         });
       }
 
-      const swap = await db
-        .select()
-        .from(swapperTable)
-        .where(
-          and(
-            eq(swapperTable.courseId, courseId),
-            eq(swapperTable.telegramUserId, otherSwapperId)
-          )
-        );
+      const [_otherSwapper, completedMatches, _course, _mySwapper] =
+        await Promise.all([
+          db
+            .select({
+              courseId: swapperTable.courseId,
+              index: swapperTable.index,
+              telegramUserId: swapperTable.telegramUserId,
+              isVisible: swapperTable.isVisible,
+            })
+            .from(swapperTable)
+            .where(
+              and(
+                eq(swapperTable.courseId, courseId),
+                eq(swapperTable.telegramUserId, otherSwapperId)
+              )
+            )
+            .limit(1),
+          db
+            .select({
+              status: swapRequestsTable.status,
+            })
+            .from(swapRequestsTable)
+            .where(
+              and(
+                eq(swapRequestsTable.courseId, courseId),
+                or(
+                  eq(swapRequestsTable.swapper1, otherSwapperId),
+                  eq(swapRequestsTable.swapper2, otherSwapperId)
+                ),
+                eq(swapRequestsTable.status, "completed")
+              )
+            )
+            .limit(1),
+          db
+            .select({
+              id: coursesTable.id,
+              code: coursesTable.code,
+              name: coursesTable.name,
+              ay: coursesTable.ay,
+              semester: coursesTable.semester,
+            })
+            .from(coursesTable)
+            .where(eq(coursesTable.id, courseId))
+            .limit(1),
+          db
+            .select({
+              index: swapperTable.index,
+            })
+            .from(swapperTable)
+            .where(
+              and(
+                eq(swapperTable.telegramUserId, userId),
+                eq(swapperTable.courseId, courseId)
+              )
+            )
+            .limit(1),
+        ]);
 
-      if (swap.length === 0) {
+      if (_otherSwapper.length === 0) {
         throw new TRPCError({
           code: "BAD_REQUEST",
           message: "Swap request not found, please report this!",
         });
       }
+      const otherSwapper = _otherSwapper[0];
+
+      // Check if the other swapper is visible.
+      if (!otherSwapper.isVisible || completedMatches.length > 0) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `The swapper is no longer looking to swap.`,
+        });
+      }
+
+      if (_course.length === 0) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Course not found, please report this!",
+        });
+      }
+      const course = _course[0];
+
+      if (_mySwapper.length === 0) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message:
+            "You have not set your index, please set one under your Telegram settings.",
+        });
+      }
+      const mySwapper = _mySwapper[0];
+
+      await db
+        .insert(swapRequestsTable)
+        .values({
+          swapper1: Math.max(userId, otherSwapper.telegramUserId),
+          swapper2: Math.min(userId, otherSwapper.telegramUserId),
+          courseId: courseId,
+          status: "pending",
+          requestedAt: new Date(),
+        })
+        .onConflictDoNothing();
+
+      const myIndexUrl = buildFStarsUrl(
+        course.code,
+        mySwapper.index,
+        course.ay,
+        course.semester
+      );
+      const otherIndexUrl = buildFStarsUrl(
+        course.code,
+        otherSwapper.index,
+        course.ay,
+        course.semester
+      );
 
       await bot.sendMessage(
         otherSwapperId,
-        `Requesting swap for ${courseId} ${otherSwapperId} ${decryptedId}`
-        // `Requesting swap for ${input.courseId} ${input.index}`
+        `*${escapeMarkdown(course.code)} ${escapeMarkdown(course.name)} Swap Request*\n@${escapeMarkdown(username)} wants to swap with you!\n \nThey have: [${escapeMarkdown(mySwapper.index)}](${myIndexUrl})\nYou have: [${escapeMarkdown(otherSwapper.index)}](${otherIndexUrl}).\n \nTo accept, click the "Accept" button below, and send them a message. We will notify them of your acceptance.`,
+        {
+          parse_mode: "Markdown",
+          disable_web_page_preview: true,
+          reply_markup: {
+            inline_keyboard: [
+              [
+                {
+                  text: "Start",
+                  url: "https://fstars.benapps.dev/",
+                },
+              ],
+            ],
+          },
+        }
       );
       return { success: true };
     }),

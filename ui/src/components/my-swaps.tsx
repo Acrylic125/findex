@@ -30,6 +30,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "./ui/badge";
 import { ScrollArea } from "./ui/scroll-area";
+import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
 
 export function SwapItemMatch({
   id,
@@ -176,7 +177,7 @@ export function SwapItemMatch({
                 </Table>
               </div>
             </div>
-            {(match.status === undefined || match.status === "pending") && (
+            {/* {(match.status === undefined || match.status === "pending") && (
               <div className="flex flex-col gap-2">
                 <p>How it works</p>
                 <div className="flex flex-row gap-2 items-center text-sm bg-card border-border border rounded-md p-1">
@@ -208,23 +209,43 @@ export function SwapItemMatch({
                   </p>
                 </div>
               </div>
-            )}
+            )} */}
           </div>
         </div>
-        <SheetFooter className="flex flex-row gap-2 pb-8">
-          <Button className="flex-1" variant="outline">
-            Cancel
-          </Button>
-          <Button
-            className="flex-1"
-            onClick={() => requestSwapMut.mutate({ id })}
-            disabled={requestSwapMut.isPending}
-          >
-            {requestSwapMut.isPending && (
-              <Loader2 className="text-primary size-4 animate-spin" />
-            )}
-            Request Swap
-          </Button>
+        <SheetFooter className="flex flex-col gap-4 border-t border-border">
+          {requestSwapMut.error && (
+            <Alert variant="destructive">
+              <AlertTitle>Error!</AlertTitle>
+              <p className="text-muted-foreground max-w-none">
+                {requestSwapMut.error.message}
+              </p>
+            </Alert>
+          )}
+          {requestSwapMut.isSuccess && (
+            <Alert variant="success">
+              <AlertTitle>Success!</AlertTitle>
+              <p className="text-muted-foreground max-w-none">
+                We will notify the swapper of your request. They will reach out
+                to you to confirm the swap.{" "}
+                <span className="text-foreground">Keep your DMs open!</span>
+              </p>
+            </Alert>
+          )}
+          <div className="flex flex-row gap-2 pb-8">
+            <Button className="flex-1" variant="outline">
+              Cancel
+            </Button>
+            <Button
+              className="flex-1"
+              onClick={() => requestSwapMut.mutate({ id })}
+              disabled={requestSwapMut.isPending}
+            >
+              {requestSwapMut.isPending && (
+                <Loader2 className="text-primary size-4 animate-spin" />
+              )}
+              Request Swap
+            </Button>
+          </div>
         </SheetFooter>
       </SheetContent>
     </Sheet>
