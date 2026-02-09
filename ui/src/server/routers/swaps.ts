@@ -43,29 +43,43 @@ function getUserEncryptionSecret(userId: number) {
   return key;
 }
 
+// Encryption needs to be deterministic so each match has a unique ID.
+// that can be persisted across rerenders.
 function encryptId(userId: number, id: string): string {
-  const iv = crypto.randomBytes(IV_LENGTH);
-  const cipher = crypto.createCipheriv(
-    "aes-256-cbc",
-    getUserEncryptionSecret(userId),
-    iv
-  );
-  let encryptedId = cipher.update(id, "utf8", "hex");
-  encryptedId += cipher.final("hex");
-  // Prepend IV to encrypted data (IV is 16 bytes = 32 hex chars)
-  return iv.toString("hex") + encryptedId;
+  const key = getUserEncryptionSecret(userId);
+  const mac = crypto.createHmac("sha256", key).update(id).digest("hex");
+  return `${id}.${mac}`;
 }
 
 function decryptId(userId: number, encryptedId: string): string {
-  // Extract IV from the beginning (IV is 16 bytes = 32 hex chars)
-  const iv = Buffer.from(encryptedId.substring(0, IV_LENGTH * 2), "hex");
-  const encrypted = encryptedId.substring(IV_LENGTH * 2);
-  const decipher = crypto.createDecipheriv(
-    "aes-256-cbc",
-    getUserEncryptionSecret(userId),
-    iv
-  );
-  return decipher.update(encrypted, "hex", "utf8") + decipher.final("utf8");
+  const lastDot = encryptedId.lastIndexOf(".");
+  if (lastDot === -1) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Invalid ID, please report this!",
+    });
+  }
+
+  const id = encryptedId.slice(0, lastDot);
+  const mac = encryptedId.slice(lastDot + 1);
+
+  const key = getUserEncryptionSecret(userId);
+  const expectedMac = crypto.createHmac("sha256", key).update(id).digest("hex");
+
+  // Constant-time comparison to avoid timing attacks
+  const macBuf = Buffer.from(mac, "hex");
+  const expectedBuf = Buffer.from(expectedMac, "hex");
+  if (
+    macBuf.length !== expectedBuf.length ||
+    !crypto.timingSafeEqual(macBuf, expectedBuf)
+  ) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Invalid ID, please report this!",
+    });
+  }
+
+  return id;
 }
 
 const otherSwapper = alias(swapperTable, "other_swapper");
@@ -499,6 +513,7 @@ export const swapsRouter = createTRPCRouter({
           status = "pending";
         }
         const encryptedId = encryptId(ctx.user.id, match._id);
+        console.log(encryptedId);
         const isPerfect = otherSwapperWantMatchIds.has(match._id);
         const entry: MatchIndexResponse = {
           numberOfRequests:

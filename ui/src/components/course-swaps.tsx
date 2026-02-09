@@ -2,13 +2,7 @@
 
 import { trpc } from "@/server/client";
 import { Skeleton } from "./ui/skeleton";
-import {
-  ArrowRight,
-  BadgeCheck,
-  ChevronRight,
-  Loader2,
-  Pencil,
-} from "lucide-react";
+import { ArrowRight, BadgeCheck, Loader2, Pencil } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "./ui/button";
 import Link from "next/link";
@@ -16,36 +10,24 @@ import { type AppRouter } from "@/server/router";
 import { type inferRouterOutputs } from "@trpc/server";
 import {
   Sheet,
-  SheetClose,
   SheetContent,
-  SheetDescription,
   SheetFooter,
   SheetHeader,
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
-import {
-  Table,
-  TableBody,
-  TableCaption,
-  TableCell,
-  TableFooter,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
 import { Badge } from "./ui/badge";
-import { ScrollArea } from "./ui/scroll-area";
-import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
-import { useState } from "react";
+import { Alert, AlertTitle } from "./ui/alert";
+import { useMemo, useState } from "react";
 import { Checkbox } from "./ui/checkbox";
 
-export function SwapItemMatch({
+export function SwapItemMatchBottomSheet({
   id,
   course,
   match,
   disabled,
-  className,
+  requestClose,
 }: {
   id: string;
   course: inferRouterOutputs<AppRouter>["swaps"]["getCourseRequestAndMatches"]["course"] & {
@@ -54,10 +36,9 @@ export function SwapItemMatch({
   };
   match: inferRouterOutputs<AppRouter>["swaps"]["getCourseRequestAndMatches"]["matches"][number];
   disabled?: boolean;
-  className?: string;
+  requestClose?: () => void;
 }) {
   const requestSwapMut = trpc.swaps.requestSwap.useMutation();
-  const [open, setOpen] = useState(false);
 
   let statusElement = null;
   if (match.status === "pending") {
@@ -77,179 +58,205 @@ export function SwapItemMatch({
   }
 
   return (
-    <Sheet open={open} onOpenChange={setOpen}>
-      <SheetTrigger>
-        <div
-          key={match.id}
-          className={cn(
-            "flex flex-row gap-2 px-2.5 py-2 items-center justify-between",
-            {
-              "bg-primary/10": match.isPerfectMatch,
-            },
-            className
+    <>
+      <div className="max-h-[calc(100vh-120px)] overflow-y-auto">
+        <SheetHeader>
+          <SheetTitle>Request Swap</SheetTitle>
+          {!match.isPerfectMatch && (
+            <Alert className="mt-2" variant="warning">
+              <AlertTitle>They may not want your index 😔</AlertTitle>
+              <p className="text-muted-foreground">
+                Perhaps they may not have considered your index, you should try
+                to request a swap with them.
+              </p>
+            </Alert>
           )}
-        >
-          <div className="flex flex-row gap-2 items-center justify-between">
-            <p className="text-sm text-foreground">{match.index}</p>
-            <div className="flex flex-row items-center">
-              {match.isVerified && (
-                <BadgeCheck className="size-4 text-green-500" />
-              )}
-              {match.numberOfRequests > 0 && (
-                <Badge variant="outline" className="text-muted-foreground">
-                  {match.numberOfRequests} Requested
+          {(match.status !== undefined || match.isPerfectMatch) && (
+            <div className="flex flex-row gap-2 items-center pt-1">
+              {match.status !== undefined && statusElement}
+              {match.isPerfectMatch && (
+                <Badge variant="outline" className="text-primary bg-primary/10">
+                  Perfect Match! 🎉
                 </Badge>
               )}
             </div>
-          </div>
-          <div className="flex flex-row gap-2 items-center">
-            <div className="flex flex-row gap-1 items-center">
-              {statusElement}
-              <ArrowRight className="size-4 text-primary" />
-            </div>
-          </div>
-        </div>
-      </SheetTrigger>
-      <SheetContent side="bottom">
-        <div className="max-h-[calc(100vh-120px)] overflow-y-auto">
-          <SheetHeader>
-            <SheetTitle>Request Swap</SheetTitle>
-            {!match.isPerfectMatch && (
-              <Alert className="mt-2" variant="warning">
-                <AlertTitle>They may not want your index 😔</AlertTitle>
-                <p className="text-muted-foreground">
-                  Perhaps they may not have considered your index, you should
-                  try to request a swap with them.
-                </p>
-              </Alert>
-            )}
-            {(match.status !== undefined || match.isPerfectMatch) && (
-              <div className="flex flex-row gap-2 items-center pt-1">
-                {match.status !== undefined && statusElement}
-                {match.isPerfectMatch && (
-                  <Badge
-                    variant="outline"
-                    className="text-primary bg-primary/10"
-                  >
-                    Perfect Match! 🎉
-                  </Badge>
-                )}
-              </div>
-            )}
-          </SheetHeader>
-          <div className="flex flex-col gap-4 px-4">
+          )}
+        </SheetHeader>
+        <div className="flex flex-col gap-4 px-4">
+          <div className="flex flex-col gap-2">
             <div className="flex flex-col gap-2">
-              <div className="flex flex-col gap-2">
-                <p>Details</p>
-              </div>
-              <div className="border border-collapse border-muted rounded-xl">
-                <Table className="w-full">
-                  <TableBody>
-                    <TableRow>
-                      <TableCell className="font-medium text-muted-foreground">
-                        Course
-                      </TableCell>
-                      <TableCell className="text-foreground text-right text-wrap whitespace-normal">
-                        {course.code} {course.name}
-                      </TableCell>
-                    </TableRow>
-                    <TableRow>
-                      <TableCell className="font-medium text-muted-foreground">
-                        Your Index
-                      </TableCell>
-                      <TableCell className="text-foreground text-right flex flex-row gap-1 items-center justify-end">
-                        <p
-                          className={cn({
-                            "text-foreground": match.isPerfectMatch,
-                            "text-yellow-500": !match.isPerfectMatch,
-                          })}
-                        >
-                          {course.haveIndex}
-                        </p>
-                      </TableCell>
-                    </TableRow>
-                    <TableRow>
-                      <TableCell className="font-medium text-muted-foreground">
-                        Their Index
-                      </TableCell>
-                      <TableCell className="text-primary text-right">
-                        {match.index}
-                      </TableCell>
-                    </TableRow>
-                    <TableRow>
-                      <TableCell className="font-medium text-muted-foreground">
-                        Is Verified Student
-                      </TableCell>
-                      <TableCell
-                        className={cn("text-primary text-right", {
-                          "text-green-500": match.isVerified,
-                          "text-red-500": !match.isVerified,
+              <p>Details</p>
+            </div>
+            <div className="border border-collapse border-muted rounded-xl">
+              <Table className="w-full">
+                <TableBody>
+                  <TableRow>
+                    <TableCell className="font-medium text-muted-foreground">
+                      Course
+                    </TableCell>
+                    <TableCell className="text-foreground text-right text-wrap whitespace-normal">
+                      {course.code} {course.name}
+                    </TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell className="font-medium text-muted-foreground">
+                      Your Index
+                    </TableCell>
+                    <TableCell className="text-foreground text-right flex flex-row gap-1 items-center justify-end">
+                      <p
+                        className={cn({
+                          "text-foreground": match.isPerfectMatch,
+                          "text-yellow-500": !match.isPerfectMatch,
                         })}
                       >
-                        {match.isVerified ? "Yes" : "No"}
-                      </TableCell>
-                    </TableRow>
-                    <TableRow>
-                      <TableCell className="font-medium text-muted-foreground">
-                        Total Requests
-                      </TableCell>
-                      <TableCell
-                        className={cn("text-right", {
-                          "text-muted-foreground": match.numberOfRequests > 0,
-                          "text-green-500": match.numberOfRequests === 0,
-                        })}
-                      >
-                        {match.numberOfRequests}
-                      </TableCell>
-                    </TableRow>
-                  </TableBody>
-                </Table>
-              </div>
+                        {course.haveIndex}
+                      </p>
+                    </TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell className="font-medium text-muted-foreground">
+                      Their Index
+                    </TableCell>
+                    <TableCell className="text-primary text-right">
+                      {match.index}
+                    </TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell className="font-medium text-muted-foreground">
+                      Is Verified Student
+                    </TableCell>
+                    <TableCell
+                      className={cn("text-primary text-right", {
+                        "text-green-500": match.isVerified,
+                        "text-red-500": !match.isVerified,
+                      })}
+                    >
+                      {match.isVerified ? "Yes" : "No"}
+                    </TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell className="font-medium text-muted-foreground">
+                      Total Requests
+                    </TableCell>
+                    <TableCell
+                      className={cn("text-right", {
+                        "text-muted-foreground": match.numberOfRequests > 0,
+                        "text-green-500": match.numberOfRequests === 0,
+                      })}
+                    >
+                      {match.numberOfRequests}
+                    </TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
             </div>
           </div>
         </div>
-        <SheetFooter className="flex flex-col gap-4 border-t border-border">
-          {requestSwapMut.error && (
-            <Alert variant="destructive">
-              <AlertTitle>Error!</AlertTitle>
-              <p className="text-muted-foreground max-w-none">
-                {requestSwapMut.error.message}
-              </p>
-            </Alert>
-          )}
-          {requestSwapMut.isSuccess && (
-            <Alert variant="success">
-              <AlertTitle>Success!</AlertTitle>
-              <p className="text-muted-foreground max-w-none">
-                We will notify the swapper of your request. They will reach out
-                to you to confirm the swap.{" "}
-                <span className="text-foreground">Keep your DMs open!</span>
-              </p>
-            </Alert>
-          )}
-          <div className="flex flex-row gap-2 pb-8">
-            <Button
-              className="flex-1"
-              variant="outline"
-              onClick={() => setOpen(false)}
-            >
-              Cancel
-            </Button>
-            <Button
-              className="flex-1"
-              onClick={() => !disabled && requestSwapMut.mutate({ id })}
-              disabled={requestSwapMut.isPending || disabled}
-            >
-              {requestSwapMut.isPending && (
-                <Loader2 className="text-primary size-4 animate-spin" />
-              )}
-              Request Swap
-            </Button>
-          </div>
-        </SheetFooter>
-      </SheetContent>
-    </Sheet>
+      </div>
+      <SheetFooter className="flex flex-col gap-4 border-t border-border">
+        {requestSwapMut.error && (
+          <Alert variant="destructive">
+            <AlertTitle>Error!</AlertTitle>
+            <p className="text-muted-foreground max-w-none">
+              {requestSwapMut.error.message}
+            </p>
+          </Alert>
+        )}
+        {requestSwapMut.isSuccess && (
+          <Alert variant="success">
+            <AlertTitle>Success!</AlertTitle>
+            <p className="text-muted-foreground max-w-none">
+              We will notify the swapper of your request. They will reach out to
+              you to confirm the swap.{" "}
+              <span className="text-foreground">Keep your DMs open!</span>
+            </p>
+          </Alert>
+        )}
+        <div className="flex flex-row gap-2 pb-8">
+          <Button className="flex-1" variant="outline" onClick={requestClose}>
+            Cancel
+          </Button>
+          <Button
+            className="flex-1"
+            onClick={() => !disabled && requestSwapMut.mutate({ id })}
+            disabled={requestSwapMut.isPending || disabled}
+          >
+            {requestSwapMut.isPending && (
+              <Loader2 className="text-primary size-4 animate-spin" />
+            )}
+            Request Swap
+          </Button>
+        </div>
+      </SheetFooter>
+    </>
   );
+}
+
+export function SwapItemMatch({
+  id,
+  match,
+  className,
+  onRequestOpen,
+}: {
+  id: string;
+  match: inferRouterOutputs<AppRouter>["swaps"]["getCourseRequestAndMatches"]["matches"][number];
+  className?: string;
+  onRequestOpen?: (id: string) => void;
+}) {
+  // const requestSwapMut = trpc.swaps.requestSwap.useMutation();
+  // const [open, setOpen] = useState(false);
+
+  let statusElement = null;
+  if (match.status === "pending") {
+    statusElement = (
+      <Badge variant="default" className="text-yellow-500 bg-yellow-700/30">
+        Pending
+      </Badge>
+    );
+  } else if (match.status === "swapped") {
+    statusElement = (
+      <Badge variant="default" className="text-gray-400 bg-gray-600/30">
+        Already Swapped
+      </Badge>
+    );
+  } else {
+    statusElement = <span className="text-sm text-primary">Request</span>;
+  }
+
+  return (
+    <button
+      // key={match.id}
+      onClick={() => onRequestOpen?.(id)}
+      className={cn(
+        "flex flex-row gap-2 px-2.5 py-2 items-center justify-between",
+        {
+          "bg-primary/10": match.isPerfectMatch,
+        },
+        className
+      )}
+    >
+      <div className="flex flex-row gap-2 items-center justify-between">
+        <p className="text-sm text-foreground">{match.index}</p>
+        <div className="flex flex-row items-center">
+          {match.isVerified && <BadgeCheck className="size-4 text-green-500" />}
+          {match.numberOfRequests > 0 && (
+            <Badge variant="outline" className="text-muted-foreground">
+              {match.numberOfRequests} Requested
+            </Badge>
+          )}
+        </div>
+      </div>
+      <div className="flex flex-row gap-2 items-center">
+        <div className="flex flex-row gap-1 items-center">
+          {statusElement}
+          <ArrowRight className="size-4 text-primary" />
+        </div>
+      </div>
+    </button>
+  );
+  // return (
+
+  // );
 }
 
 export function CourseSwapMatches({
@@ -294,6 +301,29 @@ export function CourseSwapMatches({
       });
     },
   });
+  const [bottomSheetMatchItem, setBottomSheetMatchItem] = useState<{
+    id: string;
+    isOpen: boolean;
+  } | null>(null);
+  const bottomSheetMatchItemData = useMemo(() => {
+    if (!bottomSheetMatchItem?.id) return null;
+    if (!requestsQuery.data) return null;
+    const match = requestsQuery.data.matches.find(
+      (match) => match.id === bottomSheetMatchItem.id
+    );
+    if (!match) return null;
+    return {
+      id: bottomSheetMatchItem.id,
+      course: {
+        id: requestsQuery.data.course.id,
+        haveIndex: requestsQuery.data.course.haveIndex,
+        hasSwapped: requestsQuery.data.course.hasSwapped,
+        code,
+        name,
+      },
+      match,
+    };
+  }, [bottomSheetMatchItem?.id, requestsQuery.data]);
 
   let matchesElement = null;
   if (requestsQuery.error || requestsQuery.isLoading) {
@@ -306,20 +336,22 @@ export function CourseSwapMatches({
           <SwapItemMatch
             id={match.id}
             key={match.id}
-            course={{
-              id: requestsQuery.data.course.id,
-              haveIndex: requestsQuery.data.course.haveIndex,
-              hasSwapped: requestsQuery.data.course.hasSwapped,
-              code,
-              name,
-            }}
+            // course={{
+            //   id: requestsQuery.data.course.id,
+            //   haveIndex: requestsQuery.data.course.haveIndex,
+            //   hasSwapped: requestsQuery.data.course.hasSwapped,
+            //   code,
+            //   name,
+            // }}
             match={match}
             className={cn({
               "opacity-50": disabled,
               "border-b border-border":
                 index !== requestsQuery.data.matches.length - 1,
             })}
-            disabled={disabled}
+            onRequestOpen={() =>
+              setBottomSheetMatchItem({ id: match.id, isOpen: true })
+            }
           />
         ))}
       </div>
@@ -422,6 +454,26 @@ export function CourseSwapMatches({
           )}
         {matchesElement}
       </div>
+      <Sheet
+        open={bottomSheetMatchItem?.isOpen ?? false}
+        onOpenChange={(open) =>
+          setBottomSheetMatchItem((old) => {
+            if (!old) return old;
+            return { ...old, isOpen: open };
+          })
+        }
+      >
+        <SheetContent side="bottom">
+          {bottomSheetMatchItemData && (
+            <SwapItemMatchBottomSheet
+              id={bottomSheetMatchItemData.id}
+              course={bottomSheetMatchItemData.course}
+              match={bottomSheetMatchItemData.match}
+              requestClose={() => setBottomSheetMatchItem(null)}
+            />
+          )}
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
