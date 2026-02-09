@@ -14,22 +14,24 @@ body {
     sans-serif;
 }
 
-.conveyor-lane {
+.conveyor-track {
   animation-name: conveyor-diagonal;
   animation-duration: 24s;
   animation-timing-function: linear;
   animation-iteration-count: infinite;
   will-change: transform;
+}
+
+.conveyor-wrapper {
   transform-origin: center;
+  transform: perspective(1200px) rotateX(18deg) rotateZ(-12deg);
 }
 
 @keyframes conveyor-diagonal {
   0% {
-    transform: perspective(1200px) rotateX(24deg) rotateZ(-18deg)
-      translate3d(60%, -60%, 0);
+    transform: translate3d(0, 0, 0);
   }
   100% {
-    transform: perspective(1200px) rotateX(24deg) rotateZ(-18deg)
-      translate3d(-60%, 60%, 0);
+    transform: translate3d(-50%, 0, 0);
   }
 }

@@ -77,50 +77,50 @@ const lanes = Array.from({ length: LANE_COUNT }, () =>
         <div class="pointer-events-none absolute inset-0 overflow-hidden">
           <div class="relative w-full h-full">
             <div
-              class="absolute inset-0 bg-gradient-to-b from-gray-900/50 via-gray-900/0 to-gray-900/50"
+              class="conveyor-wrapper absolute inset-0 flex flex-col justify-center gap-4"
             >
-            </div>
-
-            <div class="relative w-full h-full">
               {
                 lanes.map((lane, laneIndex) => (
-                  <div
-                    class="conveyor-lane absolute left-0 right-0 flex gap-4"
-                    style={`top: ${20 + laneIndex * 25}%; animation-delay: -${
-                      laneIndex * 4
-                    }s;`}
-                    aria-hidden="true"
-                  >
-                    {lane.concat(lane).map((message, cardIndex) => (
-                      <div
-                        class="flex flex-col gap-1 text-xs sm:text-sm p-2 sm:p-3 border border-gray-700 rounded-md bg-gray-900/90 min-w-[220px] shadow-lg shadow-black/40"
-                        data-lane={laneIndex}
-                        data-card={cardIndex}
-                      >
-                        <span class="text-primary font-medium">
-                          {message.title}
-                        </span>
-                        <div class="flex flex-col text-gray-200">
-                          {message.lines.map((line) => (
-                            <span>{line}</span>
-                          ))}
+                  <div class="conveyor-lane w-full" aria-hidden="true">
+                    <div
+                      class="conveyor-track flex gap-4"
+                      style={`animation-delay: -${laneIndex * 4}s;`}
+                    >
+                      {lane.concat(lane).map((message, cardIndex) => (
+                        <div
+                          class="flex flex-col gap-1 text-xs sm:text-sm p-2 sm:p-3 border border-gray-700 rounded-md bg-gray-900/90 min-w-[220px] shadow-lg shadow-black/40"
+                          data-lane={laneIndex}
+                          data-card={cardIndex}
+                        >
+                          <span class="text-primary font-medium">
+                            {message.title}
+                          </span>
+                          <div class="flex flex-col text-gray-200">
+                            {message.lines.map((line) => (
+                              <span>{line}</span>
+                            ))}
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
                 ))
               }
+            </div>
+            <div
+              class="absolute inset-0 bg-linear-to-b from-gray-900/0 via-gray-900/0 to-gray-900"
+            >
             </div>
           </div>
         </div>
 
         <!-- Header area -->
         <div
-          class="z-10 w-full flex flex-col gap-4 md:gap-6 lg:gap-8 py-8 md:py-12 px-4 md:px-8"
+          class="z-10 w-full flex flex-col gap-4 md:gap-6 lg:gap-8 py-8 md:py-12 px-8 md:px-12 lg:px-16"
         >
           <div class="w-full flex flex-col gap-4">
             <div
-              class="w-fit flex flex-row items-center gap-2 rounded-xl bg-primary/15 px-4 py-1.5 border border-gray-700"
+              class="w-fit flex flex-row items-center gap-2 rounded-xl bg-primary/15 px-2.5 py-1.5 md:px-4 md:py-2.5 border border-gray-700"
             >
               <div class="size-4 md:size-6">
                 <svg
@@ -197,6 +197,7 @@ const lanes = Array.from({ length: LANE_COUNT }, () =>
           >
             Use FIndex
           </button>
+          <div class="h-20"></div>
         </div>
       </div>
     </main>
