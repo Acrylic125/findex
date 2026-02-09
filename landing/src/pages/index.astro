@@ -1,5 +1,58 @@
 ---
 import "../styles/global.css";
+
+const MESSAGE_TEMPLATES = [
+  {
+    title: "Disgruntled Student",
+    lines: [
+      "looking to swap ML4",
+      "have: 84003 Mon 10.30-12.20",
+      "want: 84001-84004",
+    ],
+  },
+  {
+    title: "Sleep-Deprived Year 2",
+    lines: [
+      "need later labs pls",
+      "have: CS1231 Tue 08.30",
+      "want: any after 14.00",
+    ],
+  },
+  {
+    title: "Last-Minute Planner",
+    lines: [
+      "switching out of 8am lec",
+      "have: GER1000 Mon 08.00",
+      "want: Tue / Wed slots",
+    ],
+  },
+  {
+    title: "Exchange Kid",
+    lines: [
+      "clashes with travel plans",
+      "have: MA1521 Thu 16.00",
+      "want: Mon / Tue slots",
+    ],
+  },
+  {
+    title: "CC Lover",
+    lines: [
+      "prioritising CCA nights",
+      "have: tutorial Fri 19.00",
+      "want: any weekday daytime",
+    ],
+  },
+];
+
+const LANE_COUNT = 3;
+const CARDS_PER_LANE = 8;
+
+const lanes = Array.from({ length: LANE_COUNT }, () =>
+  Array.from({ length: CARDS_PER_LANE }, () => {
+    const index = Math.floor(Math.random() * MESSAGE_TEMPLATES.length);
+    return MESSAGE_TEMPLATES[index];
+  })
+);
 ---
 
 <html lang="en">
@@ -20,19 +73,48 @@ import "../styles/global.css";
   <body class="bg-gray-900 text-white">
     <main class="flex flex-col items-center">
       <div class="relative w-full flex flex-row max-w-7xl">
-        <div class="absolute top-0 left-0 w-full h-full">
-          <!-- Example of a message card -->
-          <div
-            class="flex flex-col gap-2 text-sm p-2 border border-gray-700 rounded-md bg-gray-900 w-fit"
-          >
-            <span class="text-primary">Disgruntled Student</span>
-            <div class="flex flex-col text-gray-200">
-              <span>looking to swap ML4</span>
-              <span>have: 84003 Mon 10.30-12.20</span>
-              <span>want: 84001-84004</span>
+        <!-- Animated background conveyors -->
+        <div class="pointer-events-none absolute inset-0 overflow-hidden">
+          <div class="relative w-full h-full">
+            <div
+              class="absolute inset-0 bg-gradient-to-b from-gray-900/50 via-gray-900/0 to-gray-900/50"
+            >
+            </div>
+
+            <div class="relative w-full h-full">
+              {
+                lanes.map((lane, laneIndex) => (
+                  <div
+                    class="conveyor-lane absolute left-0 right-0 flex gap-4"
+                    style={`top: ${20 + laneIndex * 25}%; animation-delay: -${
+                      laneIndex * 4
+                    }s;`}
+                    aria-hidden="true"
+                  >
+                    {lane.concat(lane).map((message, cardIndex) => (
+                      <div
+                        class="flex flex-col gap-1 text-xs sm:text-sm p-2 sm:p-3 border border-gray-700 rounded-md bg-gray-900/90 min-w-[220px] shadow-lg shadow-black/40"
+                        data-lane={laneIndex}
+                        data-card={cardIndex}
+                      >
+                        <span class="text-primary font-medium">
+                          {message.title}
+                        </span>
+                        <div class="flex flex-col text-gray-200">
+                          {message.lines.map((line) => (
+                            <span>{line}</span>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ))
+              }
             </div>
           </div>
         </div>
+
+        <!-- Header area -->
         <div
           class="z-10 w-full flex flex-col gap-4 md:gap-6 lg:gap-8 py-8 md:py-12 px-4 md:px-8"
         >
