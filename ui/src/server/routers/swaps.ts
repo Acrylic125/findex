@@ -16,6 +16,7 @@ import { alias } from "drizzle-orm/pg-core";
 import { bot } from "@/telegram/telegram";
 import crypto from "crypto";
 import { env } from "@/lib/env";
+import { serializeAccept, serializeAlreadySwapped } from "@/telegram/callbacks";
 
 const IV_LENGTH = 16;
 
@@ -618,9 +619,12 @@ export const swapsRouter = createTRPCRouter({
 
       const swapper1 = Math.max(userId, otherSwapper.telegramUserId);
       const swapper2 = Math.min(userId, otherSwapper.telegramUserId);
-      // callback_data max 64 bytes; format "a:courseId:swapper1:swapper2" / "s:..."
-      const acceptPayload = `a:${courseId}:${swapper1}:${swapper2}`;
-      const alreadySwappedPayload = `s:${courseId}:${swapper1}:${swapper2}`;
+      const acceptPayload = serializeAccept(courseId, swapper1, swapper2);
+      const alreadySwappedPayload = serializeAlreadySwapped(
+        courseId,
+        swapper1,
+        swapper2
+      );
 
       await bot.sendMessage(
         otherSwapperId,

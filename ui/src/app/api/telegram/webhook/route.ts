@@ -1,11 +1,15 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { bot } from "@/telegram/telegram";
-import { handleSwapCallback } from "@/server/telegram-callback";
+import {
+  handleAcceptCallback,
+  handleAlreadySwappedCallback,
+} from "@/server/telegram-callback";
 import { env } from "@/lib/env";
 import crypto from "crypto";
 import { redis } from "@/db/upstash";
 import { Lock } from "@upstash/lock";
+import { COMMAND_PREFIX, getAction } from "@/telegram/callbacks";
 
 const telegramUpdateSchema = z.object({
   update_id: z.number(),
@@ -28,6 +32,25 @@ const telegramUpdateSchema = z.object({
     })
     .optional(),
 });
+
+function handleCallback(
+  action: string,
+  callback: {
+    id: string;
+    data: string;
+  },
+  from: {
+    id: number;
+    username: string;
+  }
+) {
+  if (action === COMMAND_PREFIX.ACCEPT) {
+    return handleAcceptCallback(callback.data, from);
+  } else if (action === COMMAND_PREFIX.ALREADY_SWAPPED) {
+    return handleAlreadySwappedCallback(callback.data, from);
+  }
+  return { ok: false, error: "Invalid callback data" };
+}
 
 /** Constant-time comparison to avoid timing attacks. */
 function secureCompare(a: string, b: string): boolean {
@@ -60,25 +83,37 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true });
   }
 
+  const action = getAction(callback.data);
+  if (!action) {
+    return NextResponse.json({ ok: true });
+  }
+
   /** Check if the request has already been processed. */
   const lock = new Lock({
-    id: `findex:tg_wh:${callback.id}`,
+    id: `findex:tg_wh:${action.id}`,
     lease: 5000,
     redis: redis,
   });
 
   if (await lock.acquire()) {
     try {
-      const lockKey = `telegram:webhook:${callback.id}`;
+      const lockKey = `telegram:webhook:${action.id}`;
       const lockValue = await redis.get(lockKey);
       if (lockValue) {
         return NextResponse.json({ ok: true });
       }
 
-      const result = await handleSwapCallback(callback.data, {
-        id: callback.from.id,
-        username: callback.from.username ?? "???",
-      });
+      const result = await handleCallback(
+        action.action,
+        {
+          id: callback.id,
+          data: callback.data,
+        },
+        {
+          id: callback.from.id,
+          username: callback.from.username ?? "???",
+        }
+      );
 
       if (result.ok) {
         await bot.answerCallbackQuery(callback.id).catch(() => {});
@@ -91,7 +126,9 @@ export async function POST(request: Request) {
             )
             .catch(() => {});
         }
+        await redis.set(lockKey, "1", { ex: 60 * 5 });
       } else {
+        console.error(`Error handling callback ${callback.id}:`, result.error);
         await bot
           .answerCallbackQuery(callback.id, {
             show_alert: true,
@@ -99,7 +136,6 @@ export async function POST(request: Request) {
           })
           .catch(() => {});
       }
-      await redis.set(lockKey, "1", { ex: 86400 * 7 });
     } catch (error) {
       console.error(`Error handling callback ${callback.id}:`, error);
     } finally {
