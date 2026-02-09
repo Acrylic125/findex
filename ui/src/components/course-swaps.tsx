@@ -143,7 +143,7 @@ export function SwapItemMatchBottomSheet({
   let statusElement = null;
   if (match.status === "pending") {
     statusElement = match.isSelfInitiated ? (
-      <Badge variant="default" className="text-primary bg-primary/10">
+      <Badge variant="default" className="text-yellow-500 bg-yellow-700/30">
         Pending
       </Badge>
     ) : (
@@ -332,7 +332,7 @@ export function SwapItemMatch({
   let statusElement = null;
   if (match.status === "pending") {
     statusElement = match.isSelfInitiated ? (
-      <Badge variant="default" className="text-primary bg-primary/10">
+      <Badge variant="default" className="text-yellow-500 bg-yellow-700/30">
         Pending
       </Badge>
     ) : (
