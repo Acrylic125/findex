@@ -60,14 +60,14 @@ export async function handleAcceptCallback(
 
   await bot
     .sendMessage(
-      thisSwapper,
+      otherSwapper,
       `*Swap confirmed for ${escapeMarkdown(courseLabel)}*.\n@${escapeMarkdown(from.username)} has accepted your swap request, they may get in touch with you, please make sure your DMs are open.\n \nThis request is now marked as "Swapped". If this falls through, you may re-enable this request *My Swaps > ${escapeMarkdown(courseLabel)} > Uncheck "Have Swapped"*.`,
       { parse_mode: "Markdown" }
     )
     .catch(() => {});
   await bot
     .sendMessage(
-      otherSwapper,
+      thisSwapper,
       `*Successfully sent swap request*\nPlease message @${escapeMarkdown(from.username)} to proceed with the swap. We have reminded them to open their DMs.\n \nThis request is now marked as "Swapped". If this falls through, you may re-enable this request *My Swaps > ${escapeMarkdown(courseLabel)} > Uncheck "Have Swapped"*.`,
       { parse_mode: "Markdown" }
     )

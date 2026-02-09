@@ -336,7 +336,9 @@ export const swapsRouter = createTRPCRouter({
             // The other swapper has the index I want.
             // Whether or not the other swapper has the index I have will
             // prioritised later.
-            eq(otherSwapper.index, swapperWantTable.wantIndex)
+            eq(otherSwapper.index, swapperWantTable.wantIndex),
+            // Exclude myself.
+            not(eq(otherSwapper.telegramUserId, ctx.user.id))
           )
         )
         .groupBy(swapperWantTable.courseId),
@@ -475,7 +477,8 @@ export const swapsRouter = createTRPCRouter({
               // The other swapper has the index I want.
               // Whether or not the other swapper has the index I have will
               // prioritised later.
-              eq(swapperTable.index, swapperWantTable.wantIndex)
+              eq(swapperTable.index, swapperWantTable.wantIndex),
+              not(eq(swapperTable.telegramUserId, ctx.user.id))
             )
           ),
         db
@@ -869,9 +872,6 @@ export const swapsRouter = createTRPCRouter({
             "Invalid ID, course ID or other swapper ID is not valid, please report this!",
         });
       }
-      console.log(
-        `${courseId} ${otherSwapperId} ${ctx.user.id} ${input.action}`
-      );
 
       if (input.action === "accept") {
         return handleAcceptCallback(
