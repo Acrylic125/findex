@@ -18,8 +18,6 @@ import crypto from "crypto";
 import { env } from "@/lib/env";
 import { serializeAccept, serializeAlreadySwapped } from "@/telegram/callbacks";
 
-const IV_LENGTH = 16;
-
 function escapeMarkdown(text: string): string {
   // Escape special characters for Telegram Markdown parse mode
   return text.replace(/([_*`[\]()~])/g, "\\$1");
@@ -34,53 +32,141 @@ function buildFStarsUrl(
   return `https://fstars.benapps.dev/preview?ay=${encodeURIComponent(ay)}&s=${encodeURIComponent(semester)}&c=${encodeURIComponent(courseCode)}:${encodeURIComponent(index)}`;
 }
 
-function getUserEncryptionSecret(userId: number) {
-  const key = crypto
-    .createHash("sha256")
-    .update(`${env.ENCRYPTION_KEY}-${userId}`)
-    .digest()
-    .subarray(0, 32);
-  return key;
+const IV_LENGTH = 16;
+const TAG_LENGTH = 32; // HMAC-SHA256
+
+function getUserKeys(userId: number) {
+  const master = Buffer.from(process.env.ENCRYPTION_KEY!, "utf8");
+
+  const encKey = crypto
+    .createHmac("sha256", master)
+    .update("enc:" + userId)
+    .digest(); // 32 bytes
+
+  const macKey = crypto
+    .createHmac("sha256", master)
+    .update("mac:" + userId)
+    .digest(); // 32 bytes
+
+  return { encKey, macKey };
 }
 
-// Encryption needs to be deterministic so each match has a unique ID.
-// that can be persisted across rerenders.
 function encryptId(userId: number, id: string): string {
-  const key = getUserEncryptionSecret(userId);
-  const mac = crypto.createHmac("sha256", key).update(id).digest("hex");
-  return `${id}.${mac}`;
+  const { encKey, macKey } = getUserKeys(userId);
+  const plaintext = Buffer.from(id, "utf8");
+
+  // Synthetic IV = HMAC(macKey, plaintext)
+  const iv = crypto
+    .createHmac("sha256", macKey)
+    .update(plaintext)
+    .digest()
+    .subarray(0, IV_LENGTH);
+
+  // Encrypt with AES-256-CTR (deterministic given same IV)
+  const cipher = crypto.createCipheriv("aes-256-ctr", encKey, iv);
+  const ciphertext = Buffer.concat([cipher.update(plaintext), cipher.final()]);
+
+  // MAC = HMAC(macKey, iv || ciphertext)
+  const tag = crypto
+    .createHmac("sha256", macKey)
+    .update(Buffer.concat([iv, ciphertext]))
+    .digest();
+
+  // Output: iv | tag | ciphertext
+  return Buffer.concat([iv, tag, ciphertext]).toString("base64");
 }
 
-function decryptId(userId: number, encryptedId: string): string {
-  const lastDot = encryptedId.lastIndexOf(".");
-  if (lastDot === -1) {
+function decryptId(userId: number, data: string): string {
+  const buf = Buffer.from(data, "base64");
+
+  if (buf.length < IV_LENGTH + TAG_LENGTH) {
     throw new TRPCError({
       code: "BAD_REQUEST",
       message: "Invalid ID, please report this!",
     });
   }
 
-  const id = encryptedId.slice(0, lastDot);
-  const mac = encryptedId.slice(lastDot + 1);
+  const iv = buf.subarray(0, IV_LENGTH);
+  const tag = buf.subarray(IV_LENGTH, IV_LENGTH + TAG_LENGTH);
+  const ciphertext = buf.subarray(IV_LENGTH + TAG_LENGTH);
 
-  const key = getUserEncryptionSecret(userId);
-  const expectedMac = crypto.createHmac("sha256", key).update(id).digest("hex");
+  const { encKey, macKey } = getUserKeys(userId);
 
-  // Constant-time comparison to avoid timing attacks
-  const macBuf = Buffer.from(mac, "hex");
-  const expectedBuf = Buffer.from(expectedMac, "hex");
-  if (
-    macBuf.length !== expectedBuf.length ||
-    !crypto.timingSafeEqual(macBuf, expectedBuf)
-  ) {
+  // Verify MAC first (constant-time)
+  const expectedTag = crypto
+    .createHmac("sha256", macKey)
+    .update(Buffer.concat([iv, ciphertext]))
+    .digest();
+
+  if (!crypto.timingSafeEqual(tag, expectedTag)) {
     throw new TRPCError({
       code: "BAD_REQUEST",
       message: "Invalid ID, please report this!",
     });
   }
 
-  return id;
+  // Decrypt
+  const decipher = crypto.createDecipheriv("aes-256-ctr", encKey, iv);
+  const plaintext = Buffer.concat([
+    decipher.update(ciphertext),
+    decipher.final(),
+  ]);
+
+  return plaintext.toString("utf8");
 }
+
+// function getUserEncryptionSecret(userId: number) {
+//   const key = crypto
+//     .createHash("sha256")
+//     .update(`${env.ENCRYPTION_KEY}-${userId}`)
+//     .digest()
+//     .subarray(0, 32);
+//   return key;
+// }
+
+// function encryptId(userId: number, toEncryptData: string): string {
+//   const key = getUserEncryptionSecret(userId);
+//   const iv = crypto
+//     .createHash("sha256")
+//     .update(`${userId}:${toEncryptData}`)
+//     .digest()
+//     .subarray(0, IV_LENGTH); // 16 bytes
+
+//   const cipher = crypto.createCipheriv("aes-256-cbc", key, iv);
+//   let encryptedId = cipher.update(toEncryptData, "utf8", "hex");
+//   encryptedId += cipher.final("hex");
+
+//   // Prepend IV (hex) so decrypt can use it; IV itself is deterministic.
+//   return iv.toString("hex") + encryptedId;
+// }
+
+// function decryptId(userId: number, encryptedData: string): string {
+//   // Extract IV from the beginning (IV is 16 bytes = 32 hex chars)
+//   if (encryptedData.length < IV_LENGTH * 2) {
+//     throw new TRPCError({
+//       code: "BAD_REQUEST",
+//       message: "Invalid ID, please report this!",
+//     });
+//   }
+
+//   const iv = Buffer.from(encryptedData.substring(0, IV_LENGTH * 2), "hex");
+//   const encrypted = encryptedData.substring(IV_LENGTH * 2);
+
+//   const decipher = crypto.createDecipheriv(
+//     "aes-256-cbc",
+//     getUserEncryptionSecret(userId),
+//     iv
+//   );
+
+//   try {
+//     return decipher.update(encrypted, "hex", "utf8") + decipher.final("utf8");
+//   } catch {
+//     throw new TRPCError({
+//       code: "BAD_REQUEST",
+//       message: "Invalid ID, please report this!",
+//     });
+//   }
+// }
 
 const otherSwapper = alias(swapperTable, "other_swapper");
 

@@ -26,7 +26,6 @@ export function SwapItemMatchBottomSheet({
   id,
   course,
   match,
-  disabled,
   requestClose,
 }: {
   id: string;
@@ -35,7 +34,6 @@ export function SwapItemMatchBottomSheet({
     name: string;
   };
   match: inferRouterOutputs<AppRouter>["swaps"]["getCourseRequestAndMatches"]["matches"][number];
-  disabled?: boolean;
   requestClose?: () => void;
 }) {
   const requestSwapMut = trpc.swaps.requestSwap.useMutation();
@@ -57,6 +55,7 @@ export function SwapItemMatchBottomSheet({
     statusElement = <span className="text-sm text-primary">Request</span>;
   }
 
+  const disabled = match.status === "swapped";
   return (
     <>
       <div className="max-h-[calc(100vh-120px)] overflow-y-auto">
@@ -279,6 +278,7 @@ export function CourseSwapMatches({
   );
   const toggleSwapRequestMut = trpc.swaps.toggleSwapRequest.useMutation({
     onSuccess: (data) => {
+      // api.swaps.getAllRequests.invalidate();
       api.swaps.getAllRequests.setData(undefined, (old) => {
         if (!old) return old;
         return old.map((request) => {
@@ -297,6 +297,15 @@ export function CourseSwapMatches({
             ...old.course,
             hasSwapped: data.toggledTo,
           },
+          // matches: old.matches.map((match) => {
+          //   if (match.id === bottomSheetMatchItem?.id) {
+          //     return {
+          //       ...match,
+          //       status: data.toggledTo ? "swapped" : "pending",
+          //     };
+          //   }
+          //   return match;
+          // }),
         };
       });
     },
