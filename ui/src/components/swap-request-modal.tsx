@@ -222,8 +222,6 @@ export function SwapRequestModal({ courses }: { courses: Course[] }) {
   const [course, setCourse] = useState<Course | null>(null);
   const router = useRouter();
 
-  const [temp, setTemp] = useState<string | null>(null);
-
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <Button
@@ -240,17 +238,15 @@ export function SwapRequestModal({ courses }: { courses: Course[] }) {
           value={course}
           onChange={(course) => {
             setCourse(course);
-            // setOpen(false);
-            const result = posthog.capture("swap-request", {
+            setOpen(false);
+            posthog.capture("swap-request", {
               course_code: course.code,
               source: "modal",
             });
-            setTemp(JSON.stringify(result));
-            // router.push(`/app/swap/${course.code}/edit`);
+            router.push(`/app/swap/${course.code}/edit`);
           }}
           courses={courses}
         />
-        <span className="text-xl text-white">{temp ?? "NULL"}</span>
       </DialogContent>
     </Dialog>
   );

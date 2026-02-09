@@ -4,14 +4,8 @@ import { useEffect, useState } from "react";
 import { httpBatchLink } from "@trpc/react-query";
 import { trpc } from "@/server/client";
 import { getTrpcUrl } from "@/server/utils";
-import {
-  retrieveLaunchParams,
-  retrieveRawInitData,
-  useRawInitData,
-} from "@tma.js/sdk-react";
+import { retrieveRawInitData } from "@tma.js/sdk-react";
 import superjson from "superjson";
-import { SessionProvider } from "next-auth/react";
-import { PostHogProvider as PHProvider } from "posthog-js/react";
 import posthog from "posthog-js";
 import { env } from "@/lib/env";
 
