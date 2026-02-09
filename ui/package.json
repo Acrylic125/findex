@@ -44,6 +44,8 @@
     "node-telegram-bot-api": "^0.67.0",
     "normalize.css": "^8.0.1",
     "postgres": "^3.4.8",
+    "posthog-js": "^1.344.0",
+    "posthog-node": "^5.24.14",
     "react": "^19",
     "react-dom": "^19",
     "react-hook-form": "^7.71.1",

@@ -25,6 +25,7 @@ import { ChevronsUpDown, Plus } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { cn } from "@/lib/utils";
 import { useRouter } from "next/navigation";
+import posthog from "posthog-js";
 
 type Course = {
   id: number;
@@ -56,7 +57,7 @@ function SelectCourseCommand({
         },
         {
           name: "code",
-          weight: 2,
+          weight: 3,
         },
       ],
     });
@@ -221,9 +222,17 @@ export function SwapRequestModal({ courses }: { courses: Course[] }) {
   const [course, setCourse] = useState<Course | null>(null);
   const router = useRouter();
 
+  const [temp, setTemp] = useState<string | null>(null);
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <Button variant="default" size="lg" onClick={() => setOpen(true)}>
+      <Button
+        variant="default"
+        size="lg"
+        onClick={() => {
+          setOpen(true);
+        }}
+      >
         <Plus className="size-4" /> New Swap
       </Button>
       <DialogContent className="p-0 bg-transparent border-none">
@@ -231,11 +240,17 @@ export function SwapRequestModal({ courses }: { courses: Course[] }) {
           value={course}
           onChange={(course) => {
             setCourse(course);
-            setOpen(false);
-            router.push(`/app/swap/${course.code}/edit`);
+            // setOpen(false);
+            const result = posthog.capture("swap-request", {
+              course_code: course.code,
+              source: "modal",
+            });
+            setTemp(JSON.stringify(result));
+            // router.push(`/app/swap/${course.code}/edit`);
           }}
           courses={courses}
         />
+        <span className="text-xl text-white">{temp ?? "NULL"}</span>
       </DialogContent>
     </Dialog>
   );
