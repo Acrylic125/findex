@@ -8,7 +8,9 @@ import Link from "next/link";
 import { Badge } from "./ui/badge";
 
 export function MySwaps() {
-  const requestsQuery = trpc.swaps.getAllRequests.useQuery();
+  const requestsQuery = trpc.swaps.getAllRequests.useQuery(undefined, {
+    refetchInterval: 60_000,
+  });
 
   if (requestsQuery.isLoading) {
     return <Skeleton className="h-48 w-full" />;
@@ -17,28 +19,53 @@ export function MySwaps() {
   const data = requestsQuery.data ?? [];
   return (
     <div className="w-full flex flex-col bg-card border border-border rounded-md py-1 text-sm">
-      {data.map((request, index) => (
-        <Link href={`/app/swap/${request.course.code}`} key={request.course.id}>
-          <div
-            className={cn(
-              "flex flex-row gap-2 items-center justify-between px-2.5 py-2",
-              {
-                "border-b border-border": index !== data.length - 1,
-              }
-            )}
+      {data.map((request, index) => {
+        let tag = null;
+        if (request.hasSwapped) {
+          tag = (
+            <Badge variant="outline" className="bg-green-500/15 text-green-500">
+              Swapped!
+            </Badge>
+          );
+        } else if (request.pendingRequestCount > 0) {
+          tag = (
+            <Badge
+              variant="outline"
+              className="bg-yellow-500/15 text-yellow-500"
+            >
+              {request.pendingRequestCount} pending
+            </Badge>
+          );
+        } else if (request.matchCount > 0) {
+          tag = (
+            <Badge variant="outline" className="bg-primary/15 text-primary">
+              {request.matchCount} matches
+            </Badge>
+          );
+        }
+        return (
+          <Link
+            href={`/app/swap/${request.course.code}`}
+            key={request.course.id}
           >
-            <span className="flex-1 truncate text-foreground">
-              {request.course.code} {request.course.name}
-            </span>
-            {request.matchCount > 0 && (
-              <Badge variant="outline" className="bg-primary/15 text-primary">
-                {request.matchCount} matches
-              </Badge>
-            )}
-            <ArrowRight className="size-4 text-primary" />
-          </div>
-        </Link>
-      ))}
+            <div
+              className={cn(
+                "flex flex-row gap-2 items-center justify-between px-2.5 py-2",
+                {
+                  "border-b border-border": index !== data.length - 1,
+                }
+              )}
+            >
+              <span className="flex-1 truncate text-foreground">
+                {request.course.code} {request.course.name}
+              </span>
+              {tag}
+              {request.matchCount}
+              <ArrowRight className="size-4 text-primary" />
+            </div>
+          </Link>
+        );
+      })}
     </div>
   );
 }

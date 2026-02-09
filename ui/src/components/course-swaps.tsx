@@ -66,16 +66,10 @@ export function SwapItemMatch({
         Pending
       </Badge>
     );
-  } else if (match.status === "completed") {
-    statusElement = (
-      <Badge variant="default" className="text-green-500 bg-green-700/30">
-        Completed
-      </Badge>
-    );
-  } else if (match.status === "cancelled") {
+  } else if (match.status === "swapped") {
     statusElement = (
       <Badge variant="default" className="text-gray-400 bg-gray-600/30">
-        Cancelled
+        Already Swapped
       </Badge>
     );
   } else {
@@ -109,11 +103,9 @@ export function SwapItemMatch({
             </div>
           </div>
           <div className="flex flex-row gap-2 items-center">
-            {/* <p className="text-sm text-primary">@{match.by}</p> */}
             <div className="flex flex-row gap-1 items-center">
               {statusElement}
               <ArrowRight className="size-4 text-primary" />
-              {/* <ChevronRight className="size-4 text-muted-foreground" /> */}
             </div>
           </div>
         </div>
@@ -122,14 +114,27 @@ export function SwapItemMatch({
         <div className="max-h-[calc(100vh-120px)] overflow-y-auto">
           <SheetHeader>
             <SheetTitle>Request Swap</SheetTitle>
-            {match.isPerfectMatch && (
-              <SheetDescription>
-                Perfect Match! 🎉 You have what they want and they have what you
-                want.
-              </SheetDescription>
+            {!match.isPerfectMatch && (
+              <Alert className="mt-2" variant="warning">
+                <AlertTitle>They may not want your index 😔</AlertTitle>
+                <p className="text-muted-foreground">
+                  Perhaps they may not have considered your index, you should
+                  try to request a swap with them.
+                </p>
+              </Alert>
             )}
-            {match.status !== undefined && (
-              <div className="pt-1">{statusElement}</div>
+            {(match.status !== undefined || match.isPerfectMatch) && (
+              <div className="flex flex-row gap-2 items-center pt-1">
+                {match.status !== undefined && statusElement}
+                {match.isPerfectMatch && (
+                  <Badge
+                    variant="outline"
+                    className="text-primary bg-primary/10"
+                  >
+                    Perfect Match! 🎉
+                  </Badge>
+                )}
+              </div>
             )}
           </SheetHeader>
           <div className="flex flex-col gap-4 px-4">
@@ -152,8 +157,15 @@ export function SwapItemMatch({
                       <TableCell className="font-medium text-muted-foreground">
                         Your Index
                       </TableCell>
-                      <TableCell className="text-foreground text-right">
-                        {course.haveIndex}
+                      <TableCell className="text-foreground text-right flex flex-row gap-1 items-center justify-end">
+                        <p
+                          className={cn({
+                            "text-foreground": match.isPerfectMatch,
+                            "text-yellow-500": !match.isPerfectMatch,
+                          })}
+                        >
+                          {course.haveIndex}
+                        </p>
                       </TableCell>
                     </TableRow>
                     <TableRow>
@@ -250,11 +262,25 @@ export function CourseSwapMatches({
   code: string;
 }) {
   const api = trpc.useUtils();
-  const requestsQuery = trpc.swaps.getCourseRequestAndMatches.useQuery({
-    courseId,
-  });
+  const requestsQuery = trpc.swaps.getCourseRequestAndMatches.useQuery(
+    {
+      courseId,
+    },
+    {
+      refetchInterval: 3_000,
+    }
+  );
   const toggleSwapRequestMut = trpc.swaps.toggleSwapRequest.useMutation({
     onSuccess: (data) => {
+      api.swaps.getAllRequests.setData(undefined, (old) => {
+        if (!old) return old;
+        return old.map((request) => {
+          if (request.course.id === courseId) {
+            return { ...request, hasSwapped: data.toggledTo };
+          }
+          return request;
+        });
+      });
       // On success, set the new state to the query data.
       api.swaps.getCourseRequestAndMatches.setData({ courseId }, (old) => {
         if (!old) return old;

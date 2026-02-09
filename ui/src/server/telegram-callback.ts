@@ -53,14 +53,14 @@ export async function handleAcceptCallback(
   await bot
     .sendMessage(
       thisSwapper,
-      `*Swap confirmed for ${escapeMarkdown(courseLabel)}*.\n@${escapeMarkdown(from.username)} has accepted your swap request, they may get in touch with you, please make sure your DMs are open.\n \nYour request for ${escapeMarkdown(courseLabel)} is now marked as "Swapped". If this falls through, consider re-enabling the swap request.`,
+      `*Swap confirmed for ${escapeMarkdown(courseLabel)}*.\n@${escapeMarkdown(from.username)} has accepted your swap request, they may get in touch with you, please make sure your DMs are open.\n \nThis request is now marked as "Swapped". If this falls through, you may re-enable this request *My Swaps > ${escapeMarkdown(courseLabel)} > Uncheck "Have Swapped"*.`,
       { parse_mode: "Markdown" }
     )
     .catch(() => {});
   await bot
     .sendMessage(
       otherSwapper,
-      `*Successfully sent swap request*\nPlease message @${escapeMarkdown(from.username)} to proceed with the swap. We have reminded them to open their DMs.\n \nYour request for ${escapeMarkdown(courseLabel)} is now marked as "Swapped". If this falls through, consider re-enabling the swap request.`,
+      `*Successfully sent swap request*\nPlease message @${escapeMarkdown(from.username)} to proceed with the swap. We have reminded them to open their DMs.\n \nThis request is now marked as "Swapped". If this falls through, you may re-enable this request *My Swaps > ${escapeMarkdown(courseLabel)} > Uncheck "Have Swapped"*.`,
       { parse_mode: "Markdown" }
     )
     .catch(() => {});
@@ -104,7 +104,7 @@ export async function handleAlreadySwappedCallback(
   await bot
     .sendMessage(
       thisSwapper,
-      `*Marked ${escapeMarkdown(courseLabel)} as already swapped*.\nIf you still want to swap for this course, consider re-enabling the swap request.`,
+      `*Marked ${escapeMarkdown(courseLabel)} as already swapped*.\nIf you still want to swap for this course, you may re-enable this request *My Swaps > ${escapeMarkdown(courseLabel)} > Uncheck "Have Swapped"*.`,
       { parse_mode: "Markdown" }
     )
     .catch(() => {});
