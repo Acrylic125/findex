@@ -32,7 +32,7 @@ export function SwapItemMatchBottomSheetHint({
   const api = trpc.useUtils();
   const handleSwapRequestCallback =
     trpc.swaps.handleSwapRequestCallback.useMutation({
-      onSuccess: () => {
+      onSuccess: (data, input) => {
         toast.success("Swap request accepted!", {
           description:
             "We will notify the swapper of your request. They will reach out to you to confirm the swap. Keep your DMs open!",
@@ -53,18 +53,21 @@ export function SwapItemMatchBottomSheetHint({
             course: { ...old.course, hasSwapped: true },
           };
         });
-        api.swaps.getCourseRequestAndMatches.setData({ courseId }, (old) => {
-          if (!old) return old;
-          return {
-            ...old,
-            matches: old.matches.map((_match) => {
-              if (_match.id === match.id) {
-                return { ..._match, status: "swapped" };
-              }
-              return _match;
-            }),
-          };
-        });
+
+        if (input.action === "accept") {
+          api.swaps.getCourseRequestAndMatches.setData({ courseId }, (old) => {
+            if (!old) return old;
+            return {
+              ...old,
+              matches: old.matches.map((_match) => {
+                if (_match.id === match.id) {
+                  return { ..._match, status: "swapped" };
+                }
+                return _match;
+              }),
+            };
+          });
+        }
       },
       onError: (error) => {
         toast.error(error.message);
@@ -109,6 +112,7 @@ export function SwapItemMatchBottomSheet({
   id,
   course,
   match,
+  isAlreadySwapped,
   requestClose,
 }: {
   id: string;
@@ -117,6 +121,7 @@ export function SwapItemMatchBottomSheet({
     name: string;
   };
   match: inferRouterOutputs<AppRouter>["swaps"]["getCourseRequestAndMatches"]["matches"][number];
+  isAlreadySwapped: boolean;
   requestClose?: () => void;
 }) {
   const api = trpc.useUtils();
@@ -163,20 +168,54 @@ export function SwapItemMatchBottomSheet({
 
   let hintElement = null;
   if (match.status === "pending") {
-    hintElement = match.isSelfInitiated ? (
-      <div className="flex flex-col p-2.5 gap-1 border border-border rounded-md bg-card">
-        <h3 className="text-sm font-medium text-primary">
-          You have requested a swap with this user.
-        </h3>
-        <p className="text-muted-foreground">
-          We will notify the swapper of your request. They will reach out to you
-          to confirm the swap.{" "}
-          <span className="text-foreground">Keep your DMs open!</span>
-        </p>
-      </div>
-    ) : (
-      <SwapItemMatchBottomSheetHint courseId={course.id} match={match} />
-    );
+    if (match.isSelfInitiated) {
+      if (isAlreadySwapped) {
+        hintElement = (
+          <div className="flex flex-col p-2.5 gap-1 border border-border rounded-md bg-card">
+            <h3 className="text-sm font-medium text-primary">
+              You have requested a swap with this user. However, you already
+              have a swap for this course.
+            </h3>
+            <p className="text-muted-foreground">
+              They won't be able to request a swap with you unless you unmark
+              this course as already swapped.
+            </p>
+          </div>
+        );
+      } else {
+        hintElement = (
+          <div className="flex flex-col p-2.5 gap-1 border border-border rounded-md bg-card">
+            <h3 className="text-sm font-medium text-primary">
+              You have requested a swap with this user.
+            </h3>
+            <p className="text-muted-foreground">
+              We will notify the swapper of your request. They will reach out to
+              you to confirm the swap.{" "}
+              <span className="text-foreground">Keep your DMs open!</span>
+            </p>
+          </div>
+        );
+      }
+    } else {
+      if (isAlreadySwapped) {
+        hintElement = (
+          <div className="flex flex-col p-2.5 gap-1 border border-border rounded-md bg-card">
+            <h3 className="text-sm font-medium text-primary">
+              You have requested a swap with this user. However, you already
+              have a swap for this course.
+            </h3>
+            <p className="text-muted-foreground">
+              They won't be able to request a swap with you unless you unmark
+              this course as already swapped.
+            </p>
+          </div>
+        );
+      } else {
+        hintElement = (
+          <SwapItemMatchBottomSheetHint courseId={course.id} match={match} />
+        );
+      }
+    }
   }
 
   const disabled = match.status === "swapped" || match.status === "pending";
@@ -591,6 +630,7 @@ export function CourseSwapMatches({
               id={bottomSheetMatchItemData.id}
               course={bottomSheetMatchItemData.course}
               match={bottomSheetMatchItemData.match}
+              isAlreadySwapped={requestsQuery.data?.course.hasSwapped ?? false}
               requestClose={() =>
                 setBottomSheetMatchItem((old) => {
                   if (!old) return old;
