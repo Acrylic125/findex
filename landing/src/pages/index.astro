@@ -365,7 +365,7 @@ const lanes = Array.from({ length: LANE_COUNT }, () =>
               <p class="text-xs font-semibold text-gray-400 uppercase">
                 Step 2
               </p>
-              <div class="flex flex-row gap-4">
+              <div class="flex flex-col md:flex-row gap-4">
                 <div class="flex-1 flex flex-col gap-3">
                   <h3 class="font-semibold text-lg">Find your Swap</h3>
                   <p class="text-gray-300">
@@ -374,10 +374,16 @@ const lanes = Array.from({ length: LANE_COUNT }, () =>
                     you directly.
                   </p>
                 </div>
-                <div class="flex flex-col gap-1 items-center">
-                  <div class="flex-1 border-l border-gray-700"></div>
+                <div class="flex flex-row md:flex-col gap-1 items-center">
+                  <div
+                    class="flex-1 border-b md:border-b-0 md:border-l border-gray-800"
+                  >
+                  </div>
                   <span class="text-gray-400">Or</span>
-                  <div class="flex-1 border-l border-gray-700"></div>
+                  <div
+                    class="flex-1 border-b md:border-b-0 md:border-l border-gray-800"
+                  >
+                  </div>
                 </div>
                 <div class="flex-1 flex flex-col gap-3">
                   <h3 class="font-semibold text-lg">Be found</h3>
