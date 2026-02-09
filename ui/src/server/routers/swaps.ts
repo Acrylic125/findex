@@ -17,6 +17,10 @@ import { bot } from "@/telegram/telegram";
 import crypto from "crypto";
 import { env } from "@/lib/env";
 import { serializeAccept, serializeAlreadySwapped } from "@/telegram/callbacks";
+import {
+  handleAcceptCallback,
+  handleAlreadySwappedCallback,
+} from "../telegram-callback";
 
 function escapeMarkdown(text: string): string {
   // Escape special characters for Telegram Markdown parse mode
@@ -836,6 +840,55 @@ export const swapsRouter = createTRPCRouter({
         );
       } catch (error) {
         console.error(error);
+      }
+
+      return { success: true };
+    }),
+  handleSwapRequestCallback: protectedProcedure
+    .input(
+      z.object({
+        id: z.string(),
+        action: z.enum(["accept", "already_swapped"]),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const decryptedId = decryptId(ctx.user.id, input.id);
+      const split = decryptedId.split("-");
+      if (split.length !== 2) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Invalid ID, please report this!",
+        });
+      }
+      const courseId = parseInt(split[0]);
+      const otherSwapperId = parseInt(split[1]);
+      if (isNaN(courseId) || isNaN(otherSwapperId)) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message:
+            "Invalid ID, course ID or other swapper ID is not valid, please report this!",
+        });
+      }
+      console.log(
+        `${courseId} ${otherSwapperId} ${ctx.user.id} ${input.action}`
+      );
+
+      if (input.action === "accept") {
+        return handleAcceptCallback(
+          serializeAccept(courseId, ctx.user.id, otherSwapperId),
+          {
+            id: ctx.user.id,
+            username: ctx.user.username ?? "???",
+          }
+        );
+      } else if (input.action === "already_swapped") {
+        return handleAlreadySwappedCallback(
+          serializeAlreadySwapped(courseId, ctx.user.id, otherSwapperId),
+          {
+            id: ctx.user.id,
+            username: ctx.user.username ?? "???",
+          }
+        );
       }
 
       return { success: true };

@@ -48,7 +48,15 @@ export async function handleAcceptCallback(
   await db
     .update(swapperTable)
     .set({ hasSwapped: true })
-    .where(eq(swapperTable.courseId, courseId));
+    .where(
+      and(
+        eq(swapperTable.courseId, courseId),
+        or(
+          eq(swapperTable.telegramUserId, thisSwapper),
+          eq(swapperTable.telegramUserId, otherSwapper)
+        )
+      )
+    );
 
   await bot
     .sendMessage(
@@ -99,7 +107,12 @@ export async function handleAlreadySwappedCallback(
   await db
     .update(swapperTable)
     .set({ hasSwapped: true })
-    .where(eq(swapperTable.courseId, courseId));
+    .where(
+      and(
+        eq(swapperTable.courseId, courseId),
+        eq(swapperTable.telegramUserId, thisSwapper)
+      )
+    );
 
   await bot
     .sendMessage(

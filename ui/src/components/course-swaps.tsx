@@ -20,12 +20,57 @@ import { Badge } from "./ui/badge";
 import { Alert, AlertTitle } from "./ui/alert";
 import { useMemo, useState } from "react";
 import { Checkbox } from "./ui/checkbox";
+import { toast } from "sonner";
 
 export function SwapItemMatchBottomSheetHint({
+  courseId,
   match,
 }: {
+  courseId: number;
   match: inferRouterOutputs<AppRouter>["swaps"]["getCourseRequestAndMatches"]["matches"][number];
 }) {
+  const api = trpc.useUtils();
+  const handleSwapRequestCallback =
+    trpc.swaps.handleSwapRequestCallback.useMutation({
+      onSuccess: () => {
+        toast.success("Swap request accepted!", {
+          description:
+            "We will notify the swapper of your request. They will reach out to you to confirm the swap. Keep your DMs open!",
+        });
+        api.swaps.getAllRequests.setData(undefined, (old) => {
+          if (!old) return old;
+          return old.map((request) => {
+            if (request.course.id === courseId) {
+              return { ...request, hasSwapped: true };
+            }
+            return request;
+          });
+        });
+        api.swaps.getCourseRequestAndMatches.setData({ courseId }, (old) => {
+          if (!old) return old;
+          return {
+            ...old,
+            course: { ...old.course, hasSwapped: true },
+          };
+        });
+        api.swaps.getCourseRequestAndMatches.setData({ courseId }, (old) => {
+          if (!old) return old;
+          return {
+            ...old,
+            matches: old.matches.map((_match) => {
+              if (_match.id === match.id) {
+                return { ..._match, status: "swapped" };
+              }
+              return _match;
+            }),
+          };
+        });
+      },
+      onError: (error) => {
+        toast.error(error.message);
+      },
+    });
+
   return (
     <div className="flex flex-col p-2.5 gap-4 border border-border rounded-md bg-card">
       <h3 className="text-sm font-medium text-primary">
@@ -33,12 +78,26 @@ export function SwapItemMatchBottomSheetHint({
       </h3>
       <div className="w-full flex flex-row gap-2">
         <Button
-          variant="link"
+          variant="ghost"
           className="flex-1 border border-border bg-primary/20"
+          onClick={() =>
+            handleSwapRequestCallback.mutate({
+              id: match.id,
+              action: "already_swapped",
+            })
+          }
+          disabled={handleSwapRequestCallback.isPending}
         >
           Already Swapped
         </Button>
-        <Button variant="default" className="flex-1">
+        <Button
+          variant="default"
+          className="flex-1"
+          onClick={() =>
+            handleSwapRequestCallback.mutate({ id: match.id, action: "accept" })
+          }
+          disabled={handleSwapRequestCallback.isPending}
+        >
           Accept
         </Button>
       </div>
@@ -116,7 +175,7 @@ export function SwapItemMatchBottomSheet({
         </p>
       </div>
     ) : (
-      <SwapItemMatchBottomSheetHint match={match} />
+      <SwapItemMatchBottomSheetHint courseId={course.id} match={match} />
     );
   }
 
