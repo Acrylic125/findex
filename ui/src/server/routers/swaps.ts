@@ -566,7 +566,7 @@ export const swapsRouter = createTRPCRouter({
         } else if (match.userRequestedAt !== null) {
           status = "pending";
         }
-        const isSelfInitiated = false; // match.initiator === ctx.user.id;
+        const isSelfInitiated = match.initiator === ctx.user.id;
 
         const encryptedId = encryptId(ctx.user.id, match._id);
         const isPerfect = otherSwapperWantMatchIds.has(match._id);
