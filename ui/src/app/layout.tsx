@@ -1,7 +1,7 @@
 import type { PropsWithChildren } from "react";
 import type { Metadata } from "next";
 import { getLocale } from "next-intl/server";
-
+import { Toaster } from "@/components/ui/sonner";
 import { I18nProvider } from "@/core/i18n/provider";
 
 // import "@telegram-apps/telegram-ui/dist/styles.css";
@@ -31,6 +31,7 @@ export default async function RootLayout({ children }: PropsWithChildren) {
         <I18nProvider>
           <Providers>{children}</Providers>
         </I18nProvider>
+        <Toaster />
       </body>
     </html>
   );

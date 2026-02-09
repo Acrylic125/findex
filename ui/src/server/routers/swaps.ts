@@ -115,59 +115,6 @@ function decryptId(userId: number, data: string): string {
   return plaintext.toString("utf8");
 }
 
-// function getUserEncryptionSecret(userId: number) {
-//   const key = crypto
-//     .createHash("sha256")
-//     .update(`${env.ENCRYPTION_KEY}-${userId}`)
-//     .digest()
-//     .subarray(0, 32);
-//   return key;
-// }
-
-// function encryptId(userId: number, toEncryptData: string): string {
-//   const key = getUserEncryptionSecret(userId);
-//   const iv = crypto
-//     .createHash("sha256")
-//     .update(`${userId}:${toEncryptData}`)
-//     .digest()
-//     .subarray(0, IV_LENGTH); // 16 bytes
-
-//   const cipher = crypto.createCipheriv("aes-256-cbc", key, iv);
-//   let encryptedId = cipher.update(toEncryptData, "utf8", "hex");
-//   encryptedId += cipher.final("hex");
-
-//   // Prepend IV (hex) so decrypt can use it; IV itself is deterministic.
-//   return iv.toString("hex") + encryptedId;
-// }
-
-// function decryptId(userId: number, encryptedData: string): string {
-//   // Extract IV from the beginning (IV is 16 bytes = 32 hex chars)
-//   if (encryptedData.length < IV_LENGTH * 2) {
-//     throw new TRPCError({
-//       code: "BAD_REQUEST",
-//       message: "Invalid ID, please report this!",
-//     });
-//   }
-
-//   const iv = Buffer.from(encryptedData.substring(0, IV_LENGTH * 2), "hex");
-//   const encrypted = encryptedData.substring(IV_LENGTH * 2);
-
-//   const decipher = crypto.createDecipheriv(
-//     "aes-256-cbc",
-//     getUserEncryptionSecret(userId),
-//     iv
-//   );
-
-//   try {
-//     return decipher.update(encrypted, "hex", "utf8") + decipher.final("utf8");
-//   } catch {
-//     throw new TRPCError({
-//       code: "BAD_REQUEST",
-//       message: "Invalid ID, please report this!",
-//     });
-//   }
-// }
-
 const otherSwapper = alias(swapperTable, "other_swapper");
 
 type MatchIndexResponse = {
@@ -180,7 +127,9 @@ type MatchIndexResponse = {
   index: string;
   requestedAt: Date;
   isVerified: boolean;
+  isSelfInitiated: boolean;
   status?: "pending" | "swapped";
+  revealedBy?: string;
 };
 
 export const swapsRouter = createTRPCRouter({
@@ -481,11 +430,17 @@ export const swapsRouter = createTRPCRouter({
             telegramUserId: swapperTable.telegramUserId,
             hasSwapped: swapperTable.hasSwapped,
             userRequestedAt: swapRequestsTable.requestedAt,
+            initiator: swapRequestsTable.initiator,
+            swapperHandle: usersTable.handle,
           })
           .from(swapperWantTable)
           .innerJoin(
             swapperTable,
             eq(swapperWantTable.courseId, swapperTable.courseId)
+          )
+          .innerJoin(
+            usersTable,
+            eq(swapperTable.telegramUserId, usersTable.userId)
           )
           .leftJoin(
             swapRequestsTable,
@@ -604,6 +559,8 @@ export const swapsRouter = createTRPCRouter({
         } else if (match.userRequestedAt !== null) {
           status = "pending";
         }
+        const isSelfInitiated = false; // match.initiator === ctx.user.id;
+
         const encryptedId = encryptId(ctx.user.id, match._id);
         const isPerfect = otherSwapperWantMatchIds.has(match._id);
         const entry: MatchIndexResponse = {
@@ -615,6 +572,11 @@ export const swapsRouter = createTRPCRouter({
           index: match.wantIndex,
           requestedAt: match.requestedAt,
           status,
+          isSelfInitiated,
+          revealedBy:
+            !isSelfInitiated && status === "pending"
+              ? match.swapperHandle
+              : undefined,
         };
         if (isPerfect) {
           perfectMatches.push(entry);
@@ -826,7 +788,6 @@ export const swapsRouter = createTRPCRouter({
           swapper2: Math.min(userId, otherSwapper.telegramUserId),
           courseId: courseId,
           initiator: userId,
-          // status: "pending",
           requestedAt: new Date(),
         })
         .onConflictDoNothing();
@@ -853,25 +814,30 @@ export const swapsRouter = createTRPCRouter({
         swapper2
       );
 
-      await bot.sendMessage(
-        otherSwapperId,
-        `*${escapeMarkdown(course.code)} ${escapeMarkdown(course.name)} Swap Request*\n@${escapeMarkdown(username)} wants to swap with you!\n \nThey have: [${escapeMarkdown(mySwapper.index)}](${myIndexUrl})\nYou have: [${escapeMarkdown(otherSwapper.index)}](${otherIndexUrl}).\n \nTap "Accept" to confirm the swap, or "Already Swapped" if you've swapped elsewhere.`,
-        {
-          parse_mode: "Markdown",
-          disable_web_page_preview: true,
-          reply_markup: {
-            inline_keyboard: [
-              [
-                { text: "Accept", callback_data: acceptPayload },
-                {
-                  text: "Already Swapped",
-                  callback_data: alreadySwappedPayload,
-                },
+      try {
+        await bot.sendMessage(
+          otherSwapperId,
+          `*${escapeMarkdown(course.code)} ${escapeMarkdown(course.name)} Swap Request*\n@${escapeMarkdown(username)} wants to swap with you!\n \nThey have: [${escapeMarkdown(mySwapper.index)}](${myIndexUrl})\nYou have: [${escapeMarkdown(otherSwapper.index)}](${otherIndexUrl}).\n \nTap "Accept" to confirm the swap, or "Already Swapped" if you've swapped elsewhere.`,
+          {
+            parse_mode: "Markdown",
+            disable_web_page_preview: true,
+            reply_markup: {
+              inline_keyboard: [
+                [
+                  { text: "Accept", callback_data: acceptPayload },
+                  {
+                    text: "Already Swapped",
+                    callback_data: alreadySwappedPayload,
+                  },
+                ],
               ],
-            ],
-          },
-        }
-      );
+            },
+          }
+        );
+      } catch (error) {
+        console.error(error);
+      }
+
       return { success: true };
     }),
 });

@@ -21,6 +21,31 @@ import { Alert, AlertTitle } from "./ui/alert";
 import { useMemo, useState } from "react";
 import { Checkbox } from "./ui/checkbox";
 
+export function SwapItemMatchBottomSheetHint({
+  match,
+}: {
+  match: inferRouterOutputs<AppRouter>["swaps"]["getCourseRequestAndMatches"]["matches"][number];
+}) {
+  return (
+    <div className="flex flex-col p-2.5 gap-4 border border-border rounded-md bg-card">
+      <h3 className="text-sm font-medium text-primary">
+        Hey, @{match.revealedBy ?? "???"} want to swap with you!
+      </h3>
+      <div className="w-full flex flex-row gap-2">
+        <Button
+          variant="link"
+          className="flex-1 border border-border bg-primary/20"
+        >
+          Already Swapped
+        </Button>
+        <Button variant="default" className="flex-1">
+          Accept
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 export function SwapItemMatchBottomSheet({
   id,
   course,
@@ -35,13 +60,36 @@ export function SwapItemMatchBottomSheet({
   match: inferRouterOutputs<AppRouter>["swaps"]["getCourseRequestAndMatches"]["matches"][number];
   requestClose?: () => void;
 }) {
-  const requestSwapMut = trpc.swaps.requestSwap.useMutation();
+  const api = trpc.useUtils();
+  const requestSwapMut = trpc.swaps.requestSwap.useMutation({
+    onSuccess: () => {
+      api.swaps.getCourseRequestAndMatches.setData(
+        { courseId: course.id },
+        (old) => {
+          if (!old) return old;
+          return {
+            ...old,
+            matches: old.matches.map((match) => {
+              if (match.id === id) {
+                return { ...match, status: "pending" };
+              }
+              return match;
+            }),
+          };
+        }
+      );
+    },
+  });
 
   let statusElement = null;
   if (match.status === "pending") {
-    statusElement = (
-      <Badge variant="default" className="text-yellow-500 bg-yellow-700/30">
+    statusElement = match.isSelfInitiated ? (
+      <Badge variant="default" className="text-primary bg-primary/10">
         Pending
+      </Badge>
+    ) : (
+      <Badge variant="default" className="text-yellow-500 bg-yellow-700/30">
+        Requested by Someone!
       </Badge>
     );
   } else if (match.status === "swapped") {
@@ -54,12 +102,31 @@ export function SwapItemMatchBottomSheet({
     statusElement = <span className="text-sm text-primary">Request</span>;
   }
 
-  const disabled = match.status === "swapped";
+  let hintElement = null;
+  if (match.status === "pending") {
+    hintElement = match.isSelfInitiated ? (
+      <div className="flex flex-col p-2.5 gap-1 border border-border rounded-md bg-card">
+        <h3 className="text-sm font-medium text-primary">
+          You have requested a swap with this user.
+        </h3>
+        <p className="text-muted-foreground">
+          We will notify the swapper of your request. They will reach out to you
+          to confirm the swap.{" "}
+          <span className="text-foreground">Keep your DMs open!</span>
+        </p>
+      </div>
+    ) : (
+      <SwapItemMatchBottomSheetHint match={match} />
+    );
+  }
+
+  const disabled = match.status === "swapped" || match.status === "pending";
   return (
     <>
       <div className="max-h-[calc(100vh-120px)] overflow-y-auto">
         <SheetHeader>
           <SheetTitle>Request Swap</SheetTitle>
+
           {!match.isPerfectMatch && (
             <Alert className="mt-2" variant="warning">
               <AlertTitle>They may not want your index 😔</AlertTitle>
@@ -160,7 +227,7 @@ export function SwapItemMatchBottomSheet({
             </p>
           </Alert>
         )}
-        {requestSwapMut.isSuccess && (
+        {/* {requestSwapMut.isSuccess && (
           <Alert variant="success">
             <AlertTitle>Success!</AlertTitle>
             <p className="text-muted-foreground max-w-none">
@@ -169,7 +236,9 @@ export function SwapItemMatchBottomSheet({
               <span className="text-foreground">Keep your DMs open!</span>
             </p>
           </Alert>
-        )}
+        )} */}
+
+        {hintElement}
         <div className="flex flex-row gap-2 pb-8">
           <Button className="flex-1" variant="outline" onClick={requestClose}>
             Cancel
@@ -180,7 +249,7 @@ export function SwapItemMatchBottomSheet({
             disabled={requestSwapMut.isPending || disabled}
           >
             {requestSwapMut.isPending && (
-              <Loader2 className="text-primary size-4 animate-spin" />
+              <Loader2 className="size-4 animate-spin" />
             )}
             Request Swap
           </Button>
@@ -201,14 +270,15 @@ export function SwapItemMatch({
   className?: string;
   onRequestOpen?: (id: string) => void;
 }) {
-  // const requestSwapMut = trpc.swaps.requestSwap.useMutation();
-  // const [open, setOpen] = useState(false);
-
   let statusElement = null;
   if (match.status === "pending") {
-    statusElement = (
-      <Badge variant="default" className="text-yellow-500 bg-yellow-700/30">
+    statusElement = match.isSelfInitiated ? (
+      <Badge variant="default" className="text-primary bg-primary/10">
         Pending
+      </Badge>
+    ) : (
+      <Badge variant="default" className="text-yellow-500 bg-yellow-700/30">
+        Requested by Someone!
       </Badge>
     );
   } else if (match.status === "swapped") {
@@ -376,7 +446,11 @@ export function CourseSwapMatches({
                 Want Index
               </TableCell>
               <TableCell className="text-foreground text-right">
-                {requestsQuery.data.wantIndexes.join(", ")}
+                {requestsQuery.data.wantIndexes.length > 0 ? (
+                  requestsQuery.data.wantIndexes.join(", ")
+                ) : (
+                  <span className="text-muted-foreground">Not Set</span>
+                )}
               </TableCell>
             </TableRow>
           </TableBody>
@@ -458,7 +532,12 @@ export function CourseSwapMatches({
               id={bottomSheetMatchItemData.id}
               course={bottomSheetMatchItemData.course}
               match={bottomSheetMatchItemData.match}
-              requestClose={() => setBottomSheetMatchItem(null)}
+              requestClose={() =>
+                setBottomSheetMatchItem((old) => {
+                  if (!old) return old;
+                  return { ...old, isOpen: false };
+                })
+              }
             />
           )}
         </SheetContent>
