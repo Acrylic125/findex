@@ -60,7 +60,6 @@ export function MySwaps() {
                 {request.course.code} {request.course.name}
               </span>
               {tag}
-              {request.matchCount}
               <ArrowRight className="size-4 text-primary" />
             </div>
           </Link>

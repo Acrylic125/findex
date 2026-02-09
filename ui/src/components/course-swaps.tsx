@@ -14,7 +14,6 @@ import {
   SheetFooter,
   SheetHeader,
   SheetTitle,
-  SheetTrigger,
 } from "@/components/ui/sheet";
 import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
 import { Badge } from "./ui/badge";
@@ -253,9 +252,6 @@ export function SwapItemMatch({
       </div>
     </button>
   );
-  // return (
-
-  // );
 }
 
 export function CourseSwapMatches({
@@ -273,7 +269,7 @@ export function CourseSwapMatches({
       courseId,
     },
     {
-      refetchInterval: 3_000,
+      refetchInterval: 60_000,
     }
   );
   const toggleSwapRequestMut = trpc.swaps.toggleSwapRequest.useMutation({
@@ -297,15 +293,6 @@ export function CourseSwapMatches({
             ...old.course,
             hasSwapped: data.toggledTo,
           },
-          // matches: old.matches.map((match) => {
-          //   if (match.id === bottomSheetMatchItem?.id) {
-          //     return {
-          //       ...match,
-          //       status: data.toggledTo ? "swapped" : "pending",
-          //     };
-          //   }
-          //   return match;
-          // }),
         };
       });
     },
@@ -345,13 +332,6 @@ export function CourseSwapMatches({
           <SwapItemMatch
             id={match.id}
             key={match.id}
-            // course={{
-            //   id: requestsQuery.data.course.id,
-            //   haveIndex: requestsQuery.data.course.haveIndex,
-            //   hasSwapped: requestsQuery.data.course.hasSwapped,
-            //   code,
-            //   name,
-            // }}
             match={match}
             className={cn({
               "opacity-50": disabled,

@@ -25,15 +25,10 @@ export function AuthGuard({
   const user = trpc.user.verifySelf.useQuery();
   const router = useRouter();
 
-  if (user.isLoading) {
-    return (
-      <div className="flex items-center justify-center h-screen p-4">
-        <Skeleton className="w-full h-full" />
-      </div>
-    );
-  }
-
   useEffect(() => {
+    if (user.isLoading) {
+      return;
+    }
     // User did not load the app in Telegram.
     if (!rawInitData) {
       router.push("/");
@@ -49,7 +44,15 @@ export function AuthGuard({
     //   router.push("/onboard/verify");
     //   return;
     // }
-  }, [rawInitData, user.isError, router, user.data, verified]);
+  }, [rawInitData, user.isLoading, user.isError, router, user.data, verified]);
+
+  if (user.isLoading) {
+    return (
+      <div className="flex items-center justify-center h-screen p-4">
+        <Skeleton className="w-full h-full" />
+      </div>
+    );
+  }
 
   return children;
 }

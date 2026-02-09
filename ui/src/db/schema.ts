@@ -296,9 +296,6 @@ export const swapperWantTable = pgTable(
 export const swapRequestsTable = pgTable(
   "swap_requests",
   {
-    // courseIndexId: integer()
-    //   .notNull()
-    //   .references(() => courseIndexTable.id, { onDelete: "cascade" }),
     courseId: integer("course_id")
       .notNull()
       .references(() => coursesTable.id, { onDelete: "cascade" }),
@@ -306,6 +303,9 @@ export const swapRequestsTable = pgTable(
       mode: "number",
     }).notNull(),
     swapper2: bigint("swapper2_telegram_user_id", {
+      mode: "number",
+    }).notNull(),
+    initiator: bigint("initiator_telegram_user_id", {
       mode: "number",
     }).notNull(),
     requestedAt: timestamp("requested_at", {

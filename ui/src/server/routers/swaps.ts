@@ -10,7 +10,7 @@ import {
   swapRequestsTable,
   usersTable,
 } from "@/db/schema";
-import { and, count, eq, inArray, ne, or, sql } from "drizzle-orm";
+import { and, count, eq, inArray, max, ne, not, or, sql } from "drizzle-orm";
 import { CurrentAcadYear } from "@/lib/acad";
 import { alias } from "drizzle-orm/pg-core";
 import { bot } from "@/telegram/telegram";
@@ -491,13 +491,18 @@ export const swapsRouter = createTRPCRouter({
             swapRequestsTable,
             and(
               eq(swapperTable.courseId, swapRequestsTable.courseId),
+              // and(
+              //   sql`MAX(${swapperTable.telegramUserId}::number, ${ctx.user.id}::number) = ${swapRequestsTable.swapper1}::number`,
+              //   sql`MIN(${swapperTable.telegramUserId}::number, ${ctx.user.id}::number) = ${swapRequestsTable.swapper2}::number`
+              //   // eq(max(swapRequestsTable.swapper1, swapRequestsTable.swapper2), ctx.user.id),
+              // )
               or(
                 and(
                   eq(swapRequestsTable.swapper1, ctx.user.id),
-                  eq(swapperTable.telegramUserId, swapRequestsTable.swapper1)
+                  eq(swapRequestsTable.swapper2, swapperTable.telegramUserId)
                 ),
                 and(
-                  eq(swapperTable.telegramUserId, swapRequestsTable.swapper2),
+                  eq(swapRequestsTable.swapper1, swapperTable.telegramUserId),
                   eq(swapRequestsTable.swapper2, ctx.user.id)
                 )
               )
@@ -535,6 +540,7 @@ export const swapsRouter = createTRPCRouter({
             swapRequestsTable,
             and(
               eq(swapperTable.courseId, swapRequestsTable.courseId),
+              not(eq(swapRequestsTable.initiator, swapperTable.telegramUserId)),
               or(
                 eq(swapperTable.telegramUserId, swapRequestsTable.swapper1),
                 eq(swapperTable.telegramUserId, swapRequestsTable.swapper2)
@@ -599,7 +605,6 @@ export const swapsRouter = createTRPCRouter({
           status = "pending";
         }
         const encryptedId = encryptId(ctx.user.id, match._id);
-        console.log(encryptedId);
         const isPerfect = otherSwapperWantMatchIds.has(match._id);
         const entry: MatchIndexResponse = {
           numberOfRequests:
@@ -820,6 +825,7 @@ export const swapsRouter = createTRPCRouter({
           swapper1: Math.max(userId, otherSwapper.telegramUserId),
           swapper2: Math.min(userId, otherSwapper.telegramUserId),
           courseId: courseId,
+          initiator: userId,
           // status: "pending",
           requestedAt: new Date(),
         })
