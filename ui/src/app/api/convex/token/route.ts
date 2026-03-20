@@ -66,7 +66,6 @@ export async function GET(request: Request) {
 
   const botKey = process.env.BOT_KEY;
   if (!botKey) {
-    console.error("Missing BOT_KEY on server");
     return NextResponse.json(
       { error: "Missing BOT_KEY on server" },
       { status: 500 }
@@ -89,39 +88,11 @@ export async function GET(request: Request) {
   const issuer = process.env.CONVEX_JWT_ISSUER;
   const audience = process.env.CONVEX_JWT_AUDIENCE;
   const kid = process.env.CONVEX_JWT_KID ?? "telegram-miniapp";
-  // const privateKeyPem = process.env.CONVEX_JWT_PRIVATE_KEY;
-  const privateKeyPem = `-----BEGIN PRIVATE KEY-----
-MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDGRXlnwBShN5w7
-JVtxwu1NKxKr404CskI6tSfNA3v4+z1j2P4fgqcBjgc0bKY2JYcTM05bA+8X9Pqu
-N53LaJYPNJ2CvbUMIju4Xz59OM8sBytu0VuIP5sHSe0ErKJ3axwooTtlWkTn9vD9
-CsTqtet+R0qEMDZKcHO1JJwwSgS9oYfUsPxK6w7FLksC0mh2TgEDzyzdTCtqrSTH
-kIhnqRDpbyVenCIkweTOlMjvP1EJcFDlb+EHdw6mv4E+ppwLFnMDEWB8lhOKJOzf
-YsogG00A/j6IqDveUKps8sbdz+SMkXI9hZFyp8TtAjSVyuLDwf8/yvm+5CgqzAzg
-bCrWngiDAgMBAAECggEABJRxP/oaCo6iyg5MWkiIO7qYJVFMVC1IRgaOOKLxIlNc
-sSmU1nx+8r8USoaMoP6P7AZziRBXswQieui8+TMIGFTSTe/84R60phxzxee3MrX9
-r63Kq/na0Q8eQvfhOYScs2bksiwkyv4+GyeRseGUOCgEasuZosbjMqwkUXc8PHcW
-0LE/MIRRi6KSbbL5bFd3fyoZuPtCx1oOksMBt1Yy1N0oPl4NbkHGQkw64ADQrvZJ
-AocXx/VdWY1G30QnimSnWfEX+JbA38xwsl4uSYyp8MQlj6l+h3Zek9sSH6+n8d7l
-KAy8UHyPsWBPd5YvJFo4cG3ux7Jnrj+m6vmuddSCzQKBgQDqZ8O/p3ZCgq1br0cT
-ZPBvtNndJrU4nt2ril3cj7pO3ralLxPKWO4iiqbTzCPWgW5K+r8IPsaBrVYh1MSg
-iJyKamBqftuKQwyS5O6APVi4FeB2xfzIlMaCpy09EX25sHDn0ztgLvhvWr/Rx5/q
-/gsb+uDwYdOC2XFpd8AiAkFgpQKBgQDYiYYEVm00qcB6707wu99M03cl/H10LBaf
-vdjEMXYLHSCKL+CJzLHEACXKQdpI0sIwnqjnJjzUS5OFe8245s70z/hsZEERM+7O
-65C6joZaZBkEpKTSpJCL5vnhYV6owW9ssJmq5j79FR6XBT41GHzHQbHUU5eHh2l9
-2HaUUBGUBwKBgHNHuu57xl5pdCa+Kh9wqgrWD7uCuOdywiQGNakuinsVbxAH+hyu
-5dbZB7jsEcgB+aModGDytp+6Br02rckhxpMQRAC8CO6TkRCBRIaPJR3LrIvdTTe8
-a3CAFXCONJ3pF2375ZylHQtuvx3FpnFkpUQKeyvdgK8+j1dGTJitMUf9AoGAAsMe
-VofTtMxFjEvpMeDzpEM+Tdm+r/CwCTGexkHrQ5EHjTu3HYri6aEm2kGkyzEFESG0
-/d3bAMpGA3nk0er/0NemT5unyNRkw3b1zatrw1NrjkebYqR+w4oavelED9sH1Ncb
-3rY5L3lJfpuug3bggJox7odyc2Qi0FwmhxXOY5kCgYEAourMPhFvO1IAAah29j31
-8IIEJUYgYLJdPJaFb7VGvu8A2zfZDL7OCNzpiPxlMBTMs0Ax6a91fp0DSsJhakdL
-k39J7EplL5YhfKltjGRBVEly1e1CovDbs7l2H3E9JaStU6+atRrW4Hhy0hpbbDAN
-gyCr9YWOf+xVdc18ULLckRY=
------END PRIVATE KEY-----`;
+  const privateKeyPem = process.env.CONVEX_JWT_PRIVATE_KEY!.replaceAll(
+    "\\\\n",
+    "\n"
+  );
   if (!issuer || !audience || !privateKeyPem) {
-    console.error(
-      "Missing CONVEX_JWT_ISSUER / CONVEX_JWT_AUDIENCE / CONVEX_JWT_PRIVATE_KEY"
-    );
     return NextResponse.json(
       {
         error:
