@@ -7,7 +7,7 @@ import { MySwaps } from "@/components/my-swaps";
 import { Suspense } from "react";
 
 export async function SwapRequestModalAsync() {
-  const courses = await fetchQuery(api.tasks.getCourses);
+  const courses = await fetchQuery(api.tasks.getCourses, {});
   return (
     <SwapRequestModal
       courses={courses.map((course) => ({

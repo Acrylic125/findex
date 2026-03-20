@@ -8,6 +8,7 @@
  * @module
  */
 
+import type * as actions_telegramSwap from "../actions/telegramSwap.js";
 import type * as tasks from "../tasks.js";
 
 import type {
@@ -17,6 +18,7 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  "actions/telegramSwap": typeof actions_telegramSwap;
   tasks: typeof tasks;
 }>;
 

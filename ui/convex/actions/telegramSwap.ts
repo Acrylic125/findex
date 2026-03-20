@@ -1,9 +1,10 @@
 "use node";
 
 import { v } from "convex/values";
-import { internalAction } from "../_generated/server";
+import { action, internalAction } from "../_generated/server";
 import { ConvexError } from "convex/values";
 import { bot } from "@/telegram/telegram";
+import { api, internal } from "../_generated/api";
 
 function escapeMarkdown(text: string): string {
   return text.replace(/([_*`[\]()~])/g, "\\$1");
@@ -22,7 +23,7 @@ function buildFStarsUrl(
   )}:${encodeURIComponent(index)}`;
 }
 
-export const sendSwapRequestTelegram = internalAction({
+export const sendSwapRequest = action({
   args: {
     courseId: v.id("courses"),
     otherSwapperId: v.id("swapper"),
@@ -31,32 +32,35 @@ export const sendSwapRequestTelegram = internalAction({
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new ConvexError("Unauthorized");
 
-    const me = BigInt(identity.subject);
+    const result = await ctx.runMutation(internal.tasks.requestSwap, {
+      courseId: args.courseId,
+      otherSwapperId: args.otherSwapperId,
+    });
+    // const otherSwapper = await ctx.db.get(args.otherSwapperId);
+    // if (!otherSwapper || otherSwapper.courseId !== args.courseId) {
+    //   throw new ConvexError("Swap request not found.");
+    // }
 
-    const otherSwapper = await ctx.db.get(args.otherSwapperId);
-    if (!otherSwapper || otherSwapper.courseId !== args.courseId) {
-      throw new ConvexError("Swap request not found.");
-    }
+    // const mySwappers = await ctx.db
+    //   .query("swapper")
+    //   .withIndex("by_telegramUserId", (q) => q.eq("telegramUserId", me))
+    //   .collect();
+    // const mySwapper = mySwappers.find((s) => s.courseId === args.courseId);
+    // if (!mySwapper) throw new ConvexError("Swapper not found.");
 
-    const mySwappers = await ctx.db
-      .query("swapper")
-      .withIndex("by_telegramUserId", (q) => q.eq("telegramUserId", me))
-      .collect();
-    const mySwapper = mySwappers.find((s) => s.courseId === args.courseId);
-    if (!mySwapper) throw new ConvexError("Swapper not found.");
+    // if (otherSwapper.telegramUserId === me) {
+    //   throw new ConvexError("Cannot request a swap with yourself.");
+    // }
 
-    if (otherSwapper.telegramUserId === me) {
-      throw new ConvexError("Cannot request a swap with yourself.");
-    }
+    // const course = await ctx.db.get(args.courseId);
+    // if (!course) throw new ConvexError("Course not found.");
 
-    const course = await ctx.db.get(args.courseId);
-    if (!course) throw new ConvexError("Course not found.");
+    // const meUser = await ctx.db
+    //   .query("users")
+    //   .withIndex("by_userId", (q) => q.eq("userId", me))
+    //   .unique();
 
-    const meUser = await ctx.db
-      .query("users")
-      .withIndex("by_userId", (q) => q.eq("userId", me))
-      .unique();
-
+    const { course, mySwapper, otherSwapper } = result;
     const username = meUser?.handle ?? "???";
 
     const myIndexUrl = buildFStarsUrl(
@@ -148,4 +152,3 @@ export const sendSwapCallbackTelegram = internalAction({
     }
   },
 });
-

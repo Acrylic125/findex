@@ -1,11 +1,7 @@
 import { CurrentAcadYear } from "@/lib/acad";
 import { schools } from "@/lib/types";
-import { mutation, query } from "./_generated/server";
+import { internalMutation, mutation, query } from "./_generated/server";
 import { ConvexError, v } from "convex/values";
-import {
-  sendSwapCallbackTelegram,
-  sendSwapRequestTelegram,
-} from "./actions/telegramSwap";
 
 const schoolValidator = v.union(...schools.map((school) => v.literal(school)));
 
@@ -238,7 +234,9 @@ export const getCourseIndexesForEdit = query({
 
     const wants = await ctx.db
       .query("swapper_wants")
-      .withIndex("by_courseId_wantIndex", (q) => q.eq("courseId", args.courseId))
+      .withIndex("by_courseId_wantIndex", (q) =>
+        q.eq("courseId", args.courseId)
+      )
       .collect();
 
     const haveCountByIndex = new Map<string, number>();
@@ -351,7 +349,9 @@ export const setRequest = mutation({
     const wantSet = new Set(args.wantIndexes);
     const toRemove = wantsForCourse.filter((w) => !wantSet.has(w.wantIndex));
     const currentWantStrings = new Set(wantsForCourse.map((w) => w.wantIndex));
-    const toAdd = args.wantIndexes.filter((idx) => !currentWantStrings.has(idx));
+    const toAdd = args.wantIndexes.filter(
+      (idx) => !currentWantStrings.has(idx)
+    );
 
     const now = Date.now();
     for (const row of toRemove) {
@@ -540,10 +540,8 @@ export const getCourseRequestAndMatches = query({
 
     for (const m of candidateOtherSwappers) {
       const other = m.otherSwapper;
-      const swapper1 =
-        me > other.telegramUserId ? mySwapper._id : other._id;
-      const swapper2 =
-        me > other.telegramUserId ? other._id : mySwapper._id;
+      const swapper1 = me > other.telegramUserId ? mySwapper._id : other._id;
+      const swapper2 = me > other.telegramUserId ? other._id : mySwapper._id;
 
       const existing = await ctx.db
         .query("swap_requests")
@@ -617,7 +615,8 @@ export const getCourseRequestAndMatches = query({
       }
     }
 
-    const sortByRequestedAtDesc = (a: any, b: any) => b.requestedAt - a.requestedAt;
+    const sortByRequestedAtDesc = (a: any, b: any) =>
+      b.requestedAt - a.requestedAt;
     perfectMatches.sort(sortByRequestedAtDesc);
     otherMatches.sort(sortByRequestedAtDesc);
 
@@ -655,7 +654,7 @@ export const toggleSwapRequest = mutation({
   },
 });
 
-export const requestSwap = mutation({
+export const requestSwap = internalMutation({
   args: {
     courseId: v.id("courses"),
     otherSwapperId: v.id("swapper"),
@@ -670,6 +669,11 @@ export const requestSwap = mutation({
       throw new ConvexError("Invalid auth subject");
     }
 
+    const course = await ctx.db.get(args.courseId);
+    if (!course) {
+      throw new ConvexError("Course not found.");
+    }
+
     const otherSwapper = await ctx.db.get(args.otherSwapperId);
     if (!otherSwapper || otherSwapper.courseId !== args.courseId) {
       throw new ConvexError("Swap request not found.");
@@ -681,11 +685,11 @@ export const requestSwap = mutation({
       throw new ConvexError("The swapper is no longer looking to swap.");
     }
 
-    const mySwappers = await ctx.db
+    const mySwapper = await ctx.db
       .query("swapper")
+      .filter((q) => q.eq(q.field("courseId"), args.courseId))
       .withIndex("by_telegramUserId", (q) => q.eq("telegramUserId", me))
-      .collect();
-    const mySwapper = mySwappers.find((s) => s.courseId === args.courseId);
+      .first();
     if (!mySwapper) {
       throw new ConvexError(
         "You have not set your index, please set one under your Telegram settings."
@@ -708,7 +712,9 @@ export const requestSwap = mutation({
       .unique();
 
     if (existing) {
-      throw new ConvexError("You have already requested a swap for this course.");
+      throw new ConvexError(
+        "You have already requested a swap for this course."
+      );
     }
 
     await ctx.db.insert("swap_requests", {
@@ -719,21 +725,15 @@ export const requestSwap = mutation({
       requestedAt: Date.now(),
     });
 
-    // Best-effort telegram notification.
-    try {
-      await (ctx as any).runAction(sendSwapRequestTelegram, {
-        courseId: args.courseId,
-        otherSwapperId: args.otherSwapperId,
-      });
-    } catch {
-      // ignore; UI still works without notifications
-    }
-
-    return { success: true as const };
+    return {
+      course,
+      mySwapper,
+      otherSwapper,
+    };
   },
 });
 
-export const handleSwapRequestCallback = mutation({
+export const handleSwapRequestCallback = internalMutation({
   args: {
     courseId: v.id("courses"),
     otherSwapperId: v.id("swapper"),
@@ -765,16 +765,16 @@ export const handleSwapRequestCallback = mutation({
       await ctx.db.patch(mySwapper._id, { hasSwapped: true });
     }
 
-    // Best-effort telegram messages.
-    try {
-      await (ctx as any).runAction(sendSwapCallbackTelegram, {
-        courseId: args.courseId,
-        otherSwapperId: args.otherSwapperId,
-        action: args.action,
-      });
-    } catch {
-      // ignore
-    }
+    // // Best-effort telegram messages.
+    // try {
+    //   await (ctx as any).runAction(sendSwapCallbackTelegram, {
+    //     courseId: args.courseId,
+    //     otherSwapperId: args.otherSwapperId,
+    //     action: args.action,
+    //   });
+    // } catch {
+    //   // ignore
+    // }
 
     return { success: true as const };
   },
