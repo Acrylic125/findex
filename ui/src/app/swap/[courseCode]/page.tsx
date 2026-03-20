@@ -2,18 +2,11 @@ import { CourseSwapMatches } from "@/components/course-swaps";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { db } from "@/db";
-import {
-  courseIndexTable,
-  coursesTable,
-  swapperTable,
-  swapperWantTable,
-} from "@/db/schema";
-import { CurrentAcadYear } from "@/lib/acad";
-import { and, count, eq } from "drizzle-orm";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { fetchQuery } from "convex/nextjs";
+import { api } from "../../../../convex/_generated/api";
 
 export default async function RequestPage({
   params,
@@ -23,38 +16,19 @@ export default async function RequestPage({
   }>;
 }) {
   const { courseCode } = await params;
-  const _course = await db
-    .select()
-    .from(coursesTable)
-    .where(
-      and(
-        eq(coursesTable.code, courseCode),
-        eq(coursesTable.ay, CurrentAcadYear.ay),
-        eq(coursesTable.semester, CurrentAcadYear.semester)
-      )
-    )
-    .limit(1);
+  const header = await fetchQuery(api.tasks.getCourseHeaderByCode, {
+    courseCode,
+  });
 
-  if (_course.length === 0) {
+  if (!header) {
     notFound();
   }
-  const course = _course[0];
-  const courseId = course.id;
-
-  const [numberOfSwappers] = await Promise.all([
-    db
-      .select({
-        count: count(),
-      })
-      .from(swapperTable)
-      .where(eq(swapperTable.courseId, courseId)),
-  ]);
 
   let swappersText = null;
-  if (numberOfSwappers[0].count === 1) {
+  if (header.swappersCount === 1) {
     swappersText = "1 swapper";
-  } else if (numberOfSwappers[0].count > 0) {
-    swappersText = `${numberOfSwappers[0].count} swappers`;
+  } else if (header.swappersCount > 0) {
+    swappersText = `${header.swappersCount} swappers`;
   }
 
   return (
@@ -70,7 +44,7 @@ export default async function RequestPage({
                   </Link>
                 </Button>
                 <p className="text-xl font-bold">
-                  {course.code} {course.name}
+                  {header.code} {header.name}
                 </p>
                 {swappersText && (
                   <Badge variant="secondary">{swappersText}</Badge>
@@ -78,9 +52,9 @@ export default async function RequestPage({
               </div>
 
               <CourseSwapMatches
-                courseId={courseId}
-                name={course.name}
-                code={course.code}
+                courseId={header.courseId}
+                name={header.name}
+                code={header.code}
               />
             </div>
           </div>

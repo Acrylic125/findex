@@ -149,12 +149,17 @@ function SelectCourseIndexCommand({
                   <span className="text-sm">{courseIndex.index}</span>
 
                   <div className="flex flex-row gap-2">
-                    <Badge variant="secondary">
-                      {courseIndex.wantCount} want
-                    </Badge>
-                    <Badge variant="default">
-                      {courseIndex.haveCount} have
-                    </Badge>
+                    {courseIndex.wantCount > 0 && (
+                      <Badge variant="secondary">
+                        {courseIndex.wantCount} want
+                      </Badge>
+                    )}
+
+                    {courseIndex.haveCount > 0 && (
+                      <Badge variant="default">
+                        {courseIndex.haveCount} have
+                      </Badge>
+                    )}
                   </div>
                 </div>
               </CommandItemBase>

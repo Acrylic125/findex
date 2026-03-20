@@ -8,11 +8,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { httpBatchLink } from "@trpc/react-query";
-import { trpc } from "@/server/client";
-import { getTrpcUrl } from "@/server/utils";
 import { retrieveRawInitData } from "@tma.js/sdk-react";
-import superjson from "superjson";
 import posthog from "posthog-js";
 import { env } from "@/lib/env";
 import { ConvexProviderWithAuth, ConvexReactClient } from "convex/react";
@@ -107,23 +103,6 @@ export function Providers({ children }: { children: React.ReactNode }) {
       })
   );
 
-  const [trpcClient] = useState(() =>
-    trpc.createClient({
-      links: [
-        httpBatchLink({
-          url: getTrpcUrl(),
-          transformer: superjson,
-          headers: () => {
-            const rawInitData = retrieveRawInitData();
-            return {
-              ...(rawInitData && { Authorization: rawInitData }),
-            };
-          },
-        }),
-      ],
-    })
-  );
-
   useEffect(() => {
     const initDataRaw = retrieveRawInitData();
 
@@ -152,22 +131,13 @@ export function Providers({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <trpc.Provider client={trpcClient} queryClient={queryClient}>
-      {/* <SessionProvider
-        basePath="/api/auth"
-        refetchInterval={5 * 60}
-        refetchOnWindowFocus={true}
-      >
-        
-      </SessionProvider> */}
-      <ConvexProviderWithAuth
-        client={convex}
-        useAuth={useAuthFromProviderTelegram}
-      >
-        <QueryClientProvider client={queryClient}>
-          <SelfProvider>{children}</SelfProvider>
-        </QueryClientProvider>
-      </ConvexProviderWithAuth>
-    </trpc.Provider>
+    <ConvexProviderWithAuth
+      client={convex}
+      useAuth={useAuthFromProviderTelegram}
+    >
+      <QueryClientProvider client={queryClient}>
+        <SelfProvider>{children}</SelfProvider>
+      </QueryClientProvider>
+    </ConvexProviderWithAuth>
   );
 }
