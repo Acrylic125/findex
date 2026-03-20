@@ -3,9 +3,6 @@
 import { api } from "../../convex/_generated/api";
 import { useConvexAuth, useQuery } from "convex/react";
 import { Skeleton } from "./ui/skeleton";
-import { useRouter } from "next/navigation";
-import { useEffect } from "react";
-import { useRawInitData } from "@tma.js/sdk-react";
 import { ScrollArea } from "./ui/scroll-area";
 import { OnboardForm } from "./onboard-form";
 
