@@ -4,7 +4,17 @@ import { v } from "convex/values";
 import { action, internalAction } from "./_generated/server";
 import { ConvexError } from "convex/values";
 import { bot } from "@/telegram/telegram";
-import { api, internal } from "./_generated/api";
+import { internal } from "./_generated/api";
+import { env } from "@/lib/env";
+import crypto from "crypto";
+import { redis } from "@/db/upstash";
+import { Lock } from "@upstash/lock";
+import {
+  COMMAND_PREFIX,
+  deserializeAccept,
+  deserializeAlreadySwapped,
+  getAction,
+} from "@/telegram/callbacks";
 
 function escapeMarkdown(text: string): string {
   return text.replace(/([_*`[\]()~])/g, "\\$1");
@@ -55,18 +65,144 @@ export const sendSwapRequest = action({
 
     await bot.sendMessage(
       Number(other.telegramUserId),
-      `*${escapeMarkdown(course.code)} ${escapeMarkdown(course.name)} Swap Request*\\n@${escapeMarkdown(
-        username
-      )} wants to swap with you!\\n\\nThey have: [${escapeMarkdown(
-        me.index
-      )}](${myIndexUrl})\\nYou have: [${escapeMarkdown(
-        other.index
-      )}](${otherIndexUrl}).\\n\\nTap "Accept" to confirm the swap, or "Already Swapped" if you've swapped elsewhere.`,
+      `*${escapeMarkdown(course.code)} ${escapeMarkdown(course.name)} Swap Request*
+@${escapeMarkdown(username)} wants to swap with you!
+They have: [${escapeMarkdown(me.index)}](${myIndexUrl})
+You have: [${escapeMarkdown(other.index)}](${otherIndexUrl}).`,
       {
         parse_mode: "Markdown",
         disable_web_page_preview: true,
       }
     );
+  },
+});
+
+/** Constant-time comparison to avoid timing attacks. */
+function secureCompare(a: string, b: string): boolean {
+  const bufA = Buffer.from(a, "utf8");
+  const bufB = Buffer.from(b, "utf8");
+  if (bufA.length !== bufB.length) return false;
+  return crypto.timingSafeEqual(bufA, bufB);
+}
+
+export const verifyTelegramWebhookSecret = internalAction({
+  args: {
+    providedSecret: v.optional(v.string()),
+  },
+  handler: async (_ctx, args) => {
+    if (!args.providedSecret) return false;
+    return secureCompare(args.providedSecret, env.TELEGRAM_WEBHOOK_SECRET);
+  },
+});
+
+export const processTelegramWebhookCallback = internalAction({
+  args: {
+    callbackId: v.string(),
+    callbackData: v.string(),
+    fromId: v.number(),
+    fromUsername: v.string(),
+    messageChatId: v.optional(v.number()),
+    messageId: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const action = getAction(args.callbackData);
+    if (!action) return { ok: true as const };
+
+    const lock = new Lock({
+      id: `findex:tg_wh:${action.id}`,
+      lease: 5000,
+      redis,
+    });
+
+    if (await lock.acquire()) {
+      try {
+        const lockKey = `telegram:webhook:${action.id}`;
+        const lockValue = await redis.get(lockKey);
+        if (lockValue) {
+          return { ok: true as const };
+        }
+
+        if (
+          action.action !== COMMAND_PREFIX.ACCEPT &&
+          action.action !== COMMAND_PREFIX.ALREADY_SWAPPED
+        ) {
+          return { ok: false as const, error: "Invalid callback data" };
+        }
+
+        const parsed =
+          action.action === COMMAND_PREFIX.ACCEPT
+            ? deserializeAccept(args.callbackData)
+            : deserializeAlreadySwapped(args.callbackData);
+        if (!parsed) {
+          return {
+            ok: false as const,
+            error: `Invalid callback data: ${args.callbackData}`,
+          };
+        }
+
+        const mutationResult = await ctx.runMutation(
+          internal.tasks.handleSwapRequestWebhookCallback,
+          {
+            action:
+              action.action === COMMAND_PREFIX.ACCEPT
+                ? "accept"
+                : "already_swapped",
+            fromTelegramUserId: BigInt(args.fromId),
+            swapper1TelegramUserId: BigInt(parsed.swapper1),
+            swapper2TelegramUserId: BigInt(parsed.swapper2),
+          }
+        );
+
+        const courseLabel = `${mutationResult.courseCode} ${mutationResult.courseName}`;
+        if (action.action === COMMAND_PREFIX.ACCEPT) {
+          await bot
+            .sendMessage(
+              mutationResult.otherTelegramUserId,
+              `*Swap confirmed for ${escapeMarkdown(courseLabel)}*.\n@${escapeMarkdown(
+                args.fromUsername
+              )} has accepted your swap request, they may get in touch with you, please make sure your DMs are open.\n \nThis request is now marked as "Swapped". If this falls through, you may re-enable this request *My Swaps > ${escapeMarkdown(courseLabel)} > Uncheck "Have Swapped"*.`,
+              { parse_mode: "Markdown" }
+            )
+            .catch(() => {});
+          await bot
+            .sendMessage(
+              mutationResult.thisTelegramUserId,
+              `*Successfully sent swap request*\nPlease message @${escapeMarkdown(
+                args.fromUsername
+              )} to proceed with the swap. We have reminded them to open their DMs.\n \nThis request is now marked as "Swapped". If this falls through, you may re-enable this request *My Swaps > ${escapeMarkdown(courseLabel)} > Uncheck "Have Swapped"*.`,
+              { parse_mode: "Markdown" }
+            )
+            .catch(() => {});
+        } else {
+          await bot
+            .sendMessage(
+              mutationResult.thisTelegramUserId,
+              `*Marked ${escapeMarkdown(courseLabel)} as already swapped*.\nIf you still want to swap for this course, you may re-enable this request *My Swaps > ${escapeMarkdown(courseLabel)} > Uncheck "Have Swapped"*.`,
+              { parse_mode: "Markdown" }
+            )
+            .catch(() => {});
+        }
+
+        await bot.answerCallbackQuery(args.callbackId).catch(() => {});
+        if (args.messageChatId != null && args.messageId != null) {
+          await bot
+            .editMessageReplyMarkup(
+              { inline_keyboard: [] },
+              { chat_id: args.messageChatId, message_id: args.messageId }
+            )
+            .catch(() => {});
+        }
+        await redis.set(lockKey, "1", { ex: 60 * 5 });
+
+        return { ok: true as const };
+      } catch (error) {
+        console.error(`Error handling callback ${args.callbackId}:`, error);
+      } finally {
+        await lock.release();
+      }
+    }
+
+    return { ok: true as const };
   },
 });
 

@@ -114,6 +114,7 @@ export default defineSchema({
     courseId: v.id("courses"),
     index: v.string(),
     hasSwapped: v.boolean(),
+    previouslyMatchedWith: v.optional(v.id("swapper")),
   })
     .index("by_telegramUserId_courseId", ["telegramUserId", "courseId"])
     .index("by_courseId_index", ["courseId", "index"])
@@ -133,7 +134,7 @@ export default defineSchema({
     initiator: v.id("swapper"),
     requestedAt: v.optional(v.number()), // ms since epoch
   })
-    // .index("by_course_swapper_pair", ["courseId", "swapper1", "swapper2"])
+    .index("by_course_swapper_pair", ["courseId", "swapper1", "swapper2"])
     .index("by_courseId", ["courseId"])
     .index("by_initiator", ["initiator"]),
 });

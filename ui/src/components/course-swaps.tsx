@@ -18,15 +18,15 @@ import {
 import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
 import { Badge } from "./ui/badge";
 import { Alert, AlertTitle } from "./ui/alert";
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Checkbox } from "./ui/checkbox";
 import { toast } from "sonner";
 import { useConvexMutationState } from "./use-convex-mutation-state";
 
 type SwapCourseRequestCourse = {
   id: Id<"courses">;
-  haveIndex: string;
-  hasSwapped: boolean;
+  haveIndex?: string;
+  hasSwapped?: boolean;
 };
 
 type SwapCourseRequestMatch = {
@@ -36,7 +36,7 @@ type SwapCourseRequestMatch = {
   index: string;
   isVerified: boolean;
   requestedAt: number;
-  status?: "pending" | "swapped";
+  status?: "pending" | "swapped" | "cancelled";
   isSelfInitiated: boolean;
   revealedBy?: string;
 };
@@ -82,7 +82,7 @@ export function SwapItemMatchBottomSheetHint({
             handle({
               courseId,
               otherSwapperId: match.id,
-              action: "already_swapped",
+              // action: "already_swapped",
             })
           }
           disabled={isPending}
@@ -92,9 +92,7 @@ export function SwapItemMatchBottomSheetHint({
         <Button
           variant="default"
           className="flex-1"
-          onClick={() =>
-            handle({ courseId, otherSwapperId: match.id, action: "accept" })
-          }
+          onClick={() => handle({ courseId, otherSwapperId: match.id })}
           disabled={isPending}
         >
           Accept
@@ -120,7 +118,9 @@ export function SwapItemMatchBottomSheet({
   isAlreadySwapped: boolean;
   requestClose?: () => void;
 }) {
-  const requestSwapMut = useMutation(api.tasks.requestSwap);
+  // const requestSwapMut = useMutation(api.tasks.requestSwap);
+  // const requestSwapState = useConvexMutationState(requestSwapMut);
+  const requestSwapMut = useAction(api.actions.sendSwapRequest);
   const requestSwapState = useConvexMutationState(requestSwapMut);
 
   let statusElement = null;
@@ -424,13 +424,44 @@ export function CourseSwapMatches({
     id: Id<"swapper">;
     isOpen: boolean;
   } | null>(null);
+  const normalizeMatch = useCallback(
+    (
+      match:
+        | (typeof requestsQuery extends undefined
+            ? never
+            : NonNullable<typeof requestsQuery>["matches"][number])
+        | null
+    ): SwapCourseRequestMatch | null => {
+      if (!match) return null;
+      return {
+        id: match.otherSwapperId,
+        numberOfRequests: 0,
+        isPerfectMatch: match.isPerfectMatch,
+        index: match.index,
+        isVerified: false,
+        requestedAt: "requestedAt" in match ? (match.requestedAt ?? 0) : 0,
+        status: match.status,
+        isSelfInitiated:
+          "isSelfInitiated" in match ? (match.isSelfInitiated ?? false) : false,
+        revealedBy: undefined,
+      };
+    },
+    [requestsQuery]
+  );
   const bottomSheetMatchItemData = useMemo(() => {
     if (!bottomSheetMatchItem?.id) return null;
     if (!requestsQuery) return null;
-    const match = requestsQuery.matches.find(
-      (match) => match.id === bottomSheetMatchItem.id
+    const rawMatch = requestsQuery.matches.find(
+      (match) => match.otherSwapperId === bottomSheetMatchItem.id
     );
+    const match = normalizeMatch(rawMatch ?? null);
     if (!match) return null;
+    if (
+      !requestsQuery.course.haveIndex ||
+      requestsQuery.course.hasSwapped === undefined
+    ) {
+      return null;
+    }
     return {
       id: bottomSheetMatchItem.id,
       course: {
@@ -442,30 +473,37 @@ export function CourseSwapMatches({
       },
       match,
     };
-  }, [bottomSheetMatchItem?.id, requestsQuery, code, name]);
+  }, [bottomSheetMatchItem?.id, requestsQuery, code, name, normalizeMatch]);
 
   let matchesElement = null;
   if (requestsQuery === undefined) {
     matchesElement = <Skeleton className="h-48 w-full" />;
   } else if (requestsQuery.matches.length > 0) {
-    const disabled = requestsQuery.course.hasSwapped;
+    const disabled = requestsQuery.course.hasSwapped ?? false;
     matchesElement = (
       <div className="w-full flex flex-col bg-card border border-border rounded-md py-1 text-sm">
-        {requestsQuery.matches.map((match, index) => (
-          <SwapItemMatch
-            id={match.id}
-            key={match.id}
-            match={match}
-            className={cn({
-              "opacity-50": disabled,
-              "border-b border-border":
-                index !== requestsQuery.matches.length - 1,
-            })}
-            onRequestOpen={() =>
-              setBottomSheetMatchItem({ id: match.id, isOpen: true })
-            }
-          />
-        ))}
+        {requestsQuery.matches.map((rawMatch, index) => {
+          const match = normalizeMatch(rawMatch);
+          if (!match) return null;
+          return (
+            <SwapItemMatch
+              id={match.id}
+              key={match.id}
+              match={match}
+              className={cn({
+                "opacity-50": disabled,
+                "border-b border-border":
+                  index !== requestsQuery.matches.length - 1,
+              })}
+              onRequestOpen={() =>
+                setBottomSheetMatchItem({
+                  id: match.id,
+                  isOpen: true,
+                })
+              }
+            />
+          );
+        })}
       </div>
     );
   } else {
@@ -491,7 +529,9 @@ export function CourseSwapMatches({
                 Your Index
               </TableCell>
               <TableCell className="text-foreground text-right">
-                {requestsQuery.course.haveIndex}
+                {requestsQuery.course.haveIndex ?? (
+                  <span className="text-muted-foreground">Not Set</span>
+                )}
               </TableCell>
             </TableRow>
             <TableRow>
@@ -539,7 +579,7 @@ export function CourseSwapMatches({
       <div className="flex flex-col gap-2">
         <div className="flex flex-row gap-2 items-center justify-between">
           <h2 className="text-base font-bold">Matches</h2>
-          {requestsQuery && (
+          {requestsQuery && requestsQuery.course.hasSwapped !== undefined && (
             <div className="flex flex-row gap-2 items-center">
               <p className="text-sm text-muted-foreground">Have Swapped?</p>
               <Checkbox
@@ -556,17 +596,18 @@ export function CourseSwapMatches({
             </div>
           )}
         </div>
-        {requestsQuery !== undefined && requestsQuery.course.hasSwapped && (
-          <div className="text-sm text-muted-foreground border border-border rounded-md p-2 bg-card">
-            <h2 className="text-foreground">
-              You already found a swap for this course.
-            </h2>
-            <p className="text-muted-foreground">
-              Keep this disabled if you{"'"}ve already found a match to avoid
-              receiving swap requests.
-            </p>
-          </div>
-        )}
+        {requestsQuery !== undefined &&
+          requestsQuery.course.hasSwapped === true && (
+            <div className="text-sm text-muted-foreground border border-border rounded-md p-2 bg-card">
+              <h2 className="text-foreground">
+                You already found a swap for this course.
+              </h2>
+              <p className="text-muted-foreground">
+                Keep this disabled if you{"'"}ve already found a match to avoid
+                receiving swap requests.
+              </p>
+            </div>
+          )}
         {matchesElement}
       </div>
       <Sheet
@@ -584,7 +625,7 @@ export function CourseSwapMatches({
               id={bottomSheetMatchItemData.id}
               course={bottomSheetMatchItemData.course}
               match={bottomSheetMatchItemData.match}
-              isAlreadySwapped={requestsQuery?.course.hasSwapped ?? false}
+              isAlreadySwapped={requestsQuery?.course.hasSwapped === true}
               requestClose={() =>
                 setBottomSheetMatchItem((old) => {
                   if (!old) return old;

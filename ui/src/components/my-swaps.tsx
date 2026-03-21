@@ -28,7 +28,7 @@ export function MySwaps() {
       {data.length > 0 ? (
         data.map((request, index) => {
           let tag = null;
-          if (request.hasSwapped) {
+          if (request.type === "swapped") {
             tag = (
               <Badge
                 variant="outline"
@@ -37,16 +37,16 @@ export function MySwaps() {
                 Swapped!
               </Badge>
             );
-          } else if (request.pendingRequestCount > 0) {
+          } else if (request.type === "pending") {
             tag = (
               <Badge
                 variant="outline"
                 className="bg-yellow-500/15 text-yellow-500"
               >
-                {request.pendingRequestCount} pending
+                {request.pendingRequestsCount} pending
               </Badge>
             );
-          } else if (request.matchCount > 0) {
+          } else if (request.type === "matches") {
             tag = (
               <Badge variant="outline" className="bg-primary/15 text-primary">
                 {request.matchCount} matches
