@@ -473,7 +473,8 @@ export const getCourseRequestAndMatches = query({
     ))[] = [];
 
     for (const otherSwapper of allSwappers) {
-      // if (otherSwapper.telegramUserId === me) continue;
+      // TAG: Personal check
+      if (otherSwapper.telegramUserId === me) continue;
 
       // First check if this is a potential match. A potential match
       // is one where the other swapper's index is in my want indexes.
@@ -646,9 +647,10 @@ export const requestSwap = internalMutation({
     if (!otherSwapper || otherSwapper.courseId !== args.courseId) {
       throw new ConvexError("Swap request not found.");
     }
-    // if (otherSwapper.telegramUserId === meId) {
-    //   throw new ConvexError("Cannot request a swap with yourself.");
-    // }
+    // TAG: Personal check
+    if (otherSwapper.telegramUserId === meId) {
+      throw new ConvexError("Cannot request a swap with yourself.");
+    }
     if (otherSwapper.hasSwapped) {
       throw new ConvexError("The swapper is no longer looking to swap.");
     }
