@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@base-ui/react": "^1.1.0",
+    "@convex-dev/aggregate": "^0.2.1",
     "@getbrevo/brevo": "^3.0.1",
     "@hookform/resolvers": "^5.2.2",
     "@t3-oss/env-core": "^0.13.10",
@@ -31,6 +32,8 @@
     "client-only": "^0.0.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
+    "convex": "^1.33.1",
+    "convex-helpers": "^0.1.114",
     "dotenv": "^17.2.3",
     "drizzle-orm": "^0.45.1",
     "eruda": "^3.4.3",
