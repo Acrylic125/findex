@@ -9,6 +9,12 @@ export const env = createEnv({
     TELEGRAM_WEBHOOK_SECRET: z.string().min(1),
     UPSTASH_REDIS_REST_TOKEN: z.string(),
     UPSTASH_REDIS_REST_URL: z.string(),
+
+    AZURE_AD_CLIENT_ID: z.string(),
+    AZURE_AD_CLIENT_SECRET: z.string(),
+    AZURE_AD_TENANT_ID: z.string(),
+    NEXTAUTH_SECRET: z.string().min(1),
+    NEXTAUTH_URL: z.string().optional(),
   },
   clientPrefix: "NEXT_PUBLIC_",
   client: {
@@ -24,6 +30,12 @@ export const env = createEnv({
     // BREVO_API_KEY: process.env.BREVO_API_KEY,
     NEXT_PUBLIC_POSTHOG_KEY: process.env.NEXT_PUBLIC_POSTHOG_KEY,
     NEXT_PUBLIC_POSTHOG_HOST: process.env.NEXT_PUBLIC_POSTHOG_HOST,
+
+    AZURE_AD_CLIENT_ID: process.env.AZURE_AD_CLIENT_ID,
+    AZURE_AD_CLIENT_SECRET: process.env.AZURE_AD_CLIENT_SECRET,
+    AZURE_AD_TENANT_ID: process.env.AZURE_AD_TENANT_ID,
+    NEXTAUTH_SECRET: process.env.NEXTAUTH_SECRET,
+    NEXTAUTH_URL: process.env.NEXTAUTH_URL,
   },
 
   /**

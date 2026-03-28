@@ -1,4 +1,5 @@
 "use client";
+import { SessionProvider } from "next-auth/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   createContext,
@@ -42,7 +43,8 @@ function useAuthFromProviderTelegram() {
   useEffect(() => {
     // Next.js will render this component on the server too; guard window access.
     if (typeof window === "undefined") return;
-    setIsAuthenticated(Boolean(retrieveRawInitData()));
+    setIsAuthenticated(true);
+    // setIsAuthenticated(Boolean(retrieveRawInitData()));
   }, []);
 
   return useMemo(() => {
@@ -57,6 +59,7 @@ function useAuthFromProviderTelegram() {
         if (typeof window === "undefined") {
           return null;
         }
+        return null;
         const rawInitData = retrieveRawInitData();
         if (!rawInitData) return null;
 
@@ -103,41 +106,48 @@ export function Providers({ children }: { children: React.ReactNode }) {
       })
   );
 
-  useEffect(() => {
-    const initDataRaw = retrieveRawInitData();
+  // useEffect(() => {
+  //   try {
+  //     const initDataRaw = retrieveRawInitData();
 
-    // The 'user' parameter is a JSON string of the WebAppUser object
+  //     // The 'user' parameter is a JSON string of the WebAppUser object
 
-    if (initDataRaw) {
-      const params = new URLSearchParams(initDataRaw);
-      const userJson = params.get("user");
-      if (typeof userJson === "string") {
-        const user = JSON.parse(userJson);
-        const userId = user.id;
-        const userName = user.username;
-        posthog.identify(userId, {
-          username: userName,
-        });
-      }
-    }
-    posthog.init(env.NEXT_PUBLIC_POSTHOG_KEY, {
-      // api_host: env.NEXT_PUBLIC_POSTHOG_HOST,
-      api_host: "/relay-AQvm",
-      ui_host: env.NEXT_PUBLIC_POSTHOG_HOST,
-      // person_profiles:
-      // person_profiles: "always", // or 'always' to create profiles for anonymous users as well
-      defaults: "2025-11-30",
-    });
-  }, []);
+  //     if (initDataRaw) {
+  //       const params = new URLSearchParams(initDataRaw);
+  //       const userJson = params.get("user");
+  //       if (typeof userJson === "string") {
+  //         const user = JSON.parse(userJson);
+  //         const userId = user.id;
+  //         const userName = user.username;
+  //         posthog.identify(userId, {
+  //           username: userName,
+  //         });
+  //       }
+  //     }
+  //     posthog.init(env.NEXT_PUBLIC_POSTHOG_KEY, {
+  //       // api_host: env.NEXT_PUBLIC_POSTHOG_HOST,
+  //       api_host: "/relay-AQvm",
+  //       ui_host: env.NEXT_PUBLIC_POSTHOG_HOST,
+  //       // person_profiles:
+  //       // person_profiles: "always", // or 'always' to create profiles for anonymous users as well
+  //       defaults: "2025-11-30",
+  //     });
+  //   } catch (error) {
+  //     console.error(error);
+  //   }
+  // }, []);
 
   return (
-    <ConvexProviderWithAuth
-      client={convex}
-      useAuth={useAuthFromProviderTelegram}
-    >
-      <QueryClientProvider client={queryClient}>
-        <SelfProvider>{children}</SelfProvider>
-      </QueryClientProvider>
-    </ConvexProviderWithAuth>
+    <SessionProvider>
+      <ConvexProviderWithAuth
+        client={convex}
+        useAuth={useAuthFromProviderTelegram}
+      >
+        <QueryClientProvider client={queryClient}>
+          {/* <SelfProvider>{children}</SelfProvider> */}
+          {children}
+        </QueryClientProvider>
+      </ConvexProviderWithAuth>
+    </SessionProvider>
   );
 }

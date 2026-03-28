@@ -5,6 +5,7 @@ import { fetchQuery } from "convex/nextjs";
 import { SwapRequestModal } from "@/components/swap-request-modal";
 import { MySwaps } from "@/components/my-swaps";
 import { Suspense } from "react";
+import { redirect } from "next/navigation";
 
 export async function SwapRequestModalAsync() {
   const courses = await fetchQuery(api.tasks.getCourses, {});
@@ -20,6 +21,9 @@ export async function SwapRequestModalAsync() {
 }
 
 export default async function Page() {
+  if (true) {
+    redirect("/auth/signin");
+  }
   return (
     <AuthGuard>
       <main>
