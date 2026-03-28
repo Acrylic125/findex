@@ -152,8 +152,8 @@ export default async function Page() {
   return (
     <main>
       <ScrollArea className="bg-background text-foreground h-screen p-4">
-        <SignInToMicrosoft errorMessages={errorMessages} />
-        {/* <VerifyTelegram /> */}
+        {/* <SignInToMicrosoft errorMessages={errorMessages} /> */}
+        <VerifyTelegram />
       </ScrollArea>
     </main>
   );

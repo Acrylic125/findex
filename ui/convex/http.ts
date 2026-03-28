@@ -12,12 +12,13 @@ const TelegramUpdateSchema = z.object({
   message: z
     .object({
       message_id: z.number(),
+      chat: z.object({ id: z.number() }),
       text: z.string().optional(),
       from: z.object({
         id: z.number(),
         is_bot: z.boolean().optional(),
         first_name: z.string().optional(),
-        username: z.string(),
+        username: z.string().optional(),
       }),
     })
     .optional(),
@@ -47,7 +48,6 @@ const telegramWebhook = httpAction(async (ctx, request) => {
   let body: unknown;
   try {
     body = await request.json();
-    console.log(body);
   } catch {
     return Response.json({ error: "Invalid JSON" }, { status: 400 });
   }
@@ -68,25 +68,36 @@ const telegramWebhook = httpAction(async (ctx, request) => {
   }
 
   const callback = parsed.data.callback_query;
-  // Not an accept / decline callback.
-  if (!callback?.data || typeof callback.from?.id !== "number") {
+  if (callback?.data && typeof callback.from?.id === "number") {
+    const result = await ctx.runAction(
+      internal.actions.processTelegramWebhookCallback,
+      {
+        callbackId: callback.id,
+        payloadId: callback.data as any,
+        fromId: callback.from.id,
+        fromUsername: callback.from.username ?? "???",
+        messageChatId: callback.message?.chat?.id,
+        messageId: callback.message?.message_id,
+      }
+    );
+
+    if ("error" in result && result.error) {
+      return Response.json({ ok: false, error: result.error }, { status: 400 });
+    }
     return Response.json({ ok: true });
   }
 
-  const result = await ctx.runAction(
-    internal.actions.processTelegramWebhookCallback,
-    {
-      callbackId: callback.id,
-      payloadId: callback.data as any,
-      fromId: callback.from.id,
-      fromUsername: callback.from.username ?? "???",
-      messageChatId: callback.message?.chat?.id,
-      messageId: callback.message?.message_id,
-    }
-  );
-
-  if ("error" in result && result.error) {
-    return Response.json({ ok: false, error: result.error }, { status: 400 });
+  const message = parsed.data.message;
+  if (
+    typeof message?.text === "string" &&
+    typeof message.from?.id === "number"
+  ) {
+    await ctx.runAction(internal.actions.handleTelegramWebhookCommand, {
+      text: message.text,
+      fromId: message.from.id,
+      fromUsername: message.from.username,
+      chatId: message.chat.id,
+    });
   }
 
   return Response.json({ ok: true });

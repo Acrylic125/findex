@@ -112,7 +112,7 @@ export default defineSchema({
   telegram_user_verification: defineTable({
     email: v.string(),
     code: v.string(),
-  }).index("by_email_code", ["email", "code"]),
+  }).index("by_email", ["email"]),
 
   // FIndex swap / matching tables
   swapper: defineTable({

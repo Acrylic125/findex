@@ -207,6 +207,90 @@ export const processTelegramWebhookCallback = internalAction({
   },
 });
 
+export const handleTelegramWebhookCommand = internalAction({
+  args: {
+    text: v.string(),
+    fromId: v.number(),
+    fromUsername: v.optional(v.string()),
+    chatId: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const raw = args.text.trim();
+    if (!raw.startsWith("/")) {
+      return { ok: true as const };
+    }
+
+    const [commandWithTarget, ...params] = raw.split(/\s+/);
+    const command = commandWithTarget.split("@")[0]?.toLowerCase();
+    if (command !== "/link") {
+      return { ok: true as const };
+    }
+
+    const chatId = args.chatId ?? args.fromId;
+    if (params.length < 2) {
+      await bot
+        .sendMessage(
+          chatId,
+          "Usage: /link <email> <code>\nExample: /link user@e.ntu.edu.sg abc123"
+        )
+        .catch((error) => {
+          console.error(`Error sending /link usage to ${chatId}:`, error);
+        });
+      return { ok: true as const };
+    }
+
+    const email = params[0] ?? "";
+    const code = params[1] ?? "";
+    const username = args.fromUsername ?? `user_${args.fromId}`;
+
+    try {
+      const result = await ctx.runMutation(
+        internal.tasks.verifyTelegramAccount,
+        {
+          email,
+          code,
+          telegramUserId: BigInt(args.fromId),
+          username,
+        }
+      );
+
+      if (!result.success) {
+        await bot
+          .sendMessage(
+            chatId,
+            "Link failed. Please double-check your email/code and try again."
+          )
+          .catch((error) => {
+            console.error(
+              `Error sending /link failure message to ${chatId}:`,
+              error
+            );
+          });
+        return { ok: true as const };
+      }
+
+      await bot
+        .sendMessage(
+          chatId,
+          "Telegram account linked successfully! Please go back to the web app to continue."
+        )
+        .catch((error) => {
+          console.error(
+            `Error sending /link success message to ${chatId}:`,
+            error
+          );
+        });
+      return { ok: true as const };
+    } catch (error) {
+      console.error(`Error handling /link command from ${args.fromId}:`, error);
+      await bot
+        .sendMessage(chatId, "Something went wrong while linking your account.")
+        .catch(() => {});
+      return { ok: true as const };
+    }
+  },
+});
+
 // export const sendSwapCallbackTelegram = internalAction({
 //   args: {
 //     courseId: v.id("courses"),

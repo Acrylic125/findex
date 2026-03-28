@@ -981,11 +981,12 @@ export const onboard = mutation({
 const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 function generateCode() {
   let code = "";
-  for (let i = 0; i < 6; i++) {
+  for (let i = 0; i < 24; i++) {
     code += chars.charAt(Math.floor(Math.random() * chars.length));
   }
   return code;
 }
+const VERIFICATION_CODE_EXPIRATION_TIME_MS = 10 * 60 * 1000;
 
 export const requestLinkTelegramAccount = mutation({
   args: {},
@@ -998,11 +999,71 @@ export const requestLinkTelegramAccount = mutation({
     if (!email) {
       throw new ConvexError("Email not found");
     }
+
+    // Get existing verification code for this email.
+    const existing = await ctx.db
+      .query("telegram_user_verification")
+      .withIndex("by_email", (q) => q.eq("email", email))
+      // Sort by creation time descending.
+      .order("desc")
+      .first();
+    // Verify created at is within last 10mins.
+    if (
+      existing &&
+      existing._creationTime > Date.now() - VERIFICATION_CODE_EXPIRATION_TIME_MS
+    ) {
+      return { success: false, code: existing.code, email };
+    }
+
     const code = generateCode();
     await ctx.db.insert("telegram_user_verification", {
       email,
       code,
     });
     return { success: true, code, email };
+  },
+});
+
+export const verifyTelegramAccount = internalMutation({
+  args: {
+    email: v.string(),
+    code: v.string(),
+    telegramUserId: v.int64(),
+    username: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const existing = await ctx.db
+      .query("telegram_user_verification")
+      .withIndex("by_email", (q) => q.eq("email", args.email))
+      .order("desc")
+      .first();
+    if (!existing || existing.code !== args.code) {
+      return { success: false };
+    }
+
+    await ctx.db.delete(existing._id);
+    const existingUser = await ctx.db
+      .query("users")
+      .withIndex("by_userId", (q) => q.eq("userId", args.telegramUserId))
+      .unique();
+
+    if (existingUser) {
+      await ctx.db.patch(existingUser._id, {
+        userId: args.telegramUserId,
+        telegramUserId: args.telegramUserId,
+        handle: args.username,
+        email: args.email,
+      });
+    } else {
+      await ctx.db.insert("users", {
+        userId: args.telegramUserId,
+        telegramUserId: args.telegramUserId,
+        handle: args.username,
+        email: args.email,
+        school: "",
+      });
+    }
+
+    return { success: true };
   },
 });
