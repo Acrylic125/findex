@@ -22,7 +22,7 @@ export async function SwapRequestModalAsync() {
 
 export default async function Page() {
   if (true) {
-    redirect("/auth/signin");
+    redirect("/onboard");
   }
   return (
     <AuthGuard>

@@ -9,6 +9,18 @@ const http = httpRouter();
 
 const TelegramUpdateSchema = z.object({
   update_id: z.number(),
+  message: z
+    .object({
+      message_id: z.number(),
+      text: z.string().optional(),
+      from: z.object({
+        id: z.number(),
+        is_bot: z.boolean().optional(),
+        first_name: z.string().optional(),
+        username: z.string(),
+      }),
+    })
+    .optional(),
   callback_query: z
     .object({
       id: z.string(),
@@ -31,6 +43,20 @@ const TelegramUpdateSchema = z.object({
 
 const telegramWebhook = httpAction(async (ctx, request) => {
   const secret = request.headers.get("X-Telegram-Bot-Api-Secret-Token");
+
+  let body: unknown;
+  try {
+    body = await request.json();
+    console.log(body);
+  } catch {
+    return Response.json({ error: "Invalid JSON" }, { status: 400 });
+  }
+
+  const parsed = TelegramUpdateSchema.safeParse(body);
+  if (!parsed.success) {
+    return Response.json({ error: "Invalid payload" }, { status: 400 });
+  }
+
   const isAuthorized = await ctx.runAction(
     internal.actions.verifyTelegramWebhookSecret,
     {
@@ -41,19 +67,8 @@ const telegramWebhook = httpAction(async (ctx, request) => {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return Response.json({ error: "Invalid JSON" }, { status: 400 });
-  }
-
-  const parsed = TelegramUpdateSchema.safeParse(body);
-  if (!parsed.success) {
-    return Response.json({ error: "Invalid payload" }, { status: 400 });
-  }
-
   const callback = parsed.data.callback_query;
+  // Not an accept / decline callback.
   if (!callback?.data || typeof callback.from?.id !== "number") {
     return Response.json({ ok: true });
   }

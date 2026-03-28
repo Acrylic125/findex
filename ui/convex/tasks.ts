@@ -960,7 +960,9 @@ export const onboard = mutation({
 
     const userId = await ctx.db.insert("users", {
       userId: telegramUserId,
+      telegramUserId,
       handle: username,
+      email: identity.email ?? "",
       school: args.school,
     });
 
@@ -976,13 +978,31 @@ export const onboard = mutation({
   },
 });
 
-export const testRequest = query({
+const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+function generateCode() {
+  let code = "";
+  for (let i = 0; i < 6; i++) {
+    code += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return code;
+}
+
+export const requestLinkTelegramAccount = mutation({
   args: {},
   handler: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) {
-      return { success: false, error: "Unauthorized" };
+      throw new ConvexError("Unauthorized");
     }
-    return { success: true, identity };
+    const email = identity.email ?? identity.subject;
+    if (!email) {
+      throw new ConvexError("Email not found");
+    }
+    const code = generateCode();
+    await ctx.db.insert("telegram_user_verification", {
+      email,
+      code,
+    });
+    return { success: true, code, email };
   },
 });

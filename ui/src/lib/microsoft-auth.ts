@@ -1,4 +1,5 @@
 import { env } from "@/lib/env";
+import { cookies } from "next/headers";
 
 const MICROSOFT_AUTH_BASE_PATH = "/api/auth/microsoft";
 const MICROSOFT_SCOPE = "openid profile email";
@@ -133,6 +134,10 @@ export function getAuthCookies(request: Request) {
   };
 }
 
+export function getAuthCookiesFromCookies(
+  _cookies: Awaited<ReturnType<typeof cookies>>
+) {}
+
 export function setAuthFlowCookies(
   headers: Headers,
   request: Request,
@@ -173,7 +178,6 @@ export async function setSessionCookie(
   session: MicrosoftSession
 ) {
   const signed = await signSession(session);
-  console.log("setSessionCookie", signed);
   appendCookie(
     headers,
     AUTH_SESSION_COOKIE,
@@ -230,7 +234,7 @@ async function signSession(session: MicrosoftSession) {
   return `${payload}.${signature}`;
 }
 
-async function verifySession(raw: string) {
+export async function verifySession(raw: string) {
   const [payload, signature] = raw.split(".");
   if (!payload || !signature) return null;
 

@@ -101,11 +101,18 @@ export default defineSchema({
   users: defineTable({
     userId: v.int64(),
     handle: v.string(),
+    telegramUserId: v.int64(),
+    email: v.string(),
     school: v.string(),
-    // joinDate: v.optional(v.number()), // ms since epoch
   })
     .index("by_handle", ["handle"])
     .index("by_userId", ["userId"]),
+
+  // Telegram user verification
+  telegram_user_verification: defineTable({
+    email: v.string(),
+    code: v.string(),
+  }).index("by_email_code", ["email", "code"]),
 
   // FIndex swap / matching tables
   swapper: defineTable({

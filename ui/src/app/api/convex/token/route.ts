@@ -71,7 +71,6 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  console.log("session", session);
   const token = signJwtRS256({
     issuer,
     audience,
@@ -80,7 +79,6 @@ export async function GET(request: Request) {
     privateKeyPem,
     expiresInSeconds: 60 * 60,
   });
-  console.log("token", token);
 
   return NextResponse.json({ token });
 }
