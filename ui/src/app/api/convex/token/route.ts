@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { isValid, parse } from "@tma.js/init-data-node";
 import crypto from "node:crypto";
+import { env } from "@/lib/env";
+import { readSession } from "@/lib/microsoft-auth";
 
 function base64Url(input: Buffer | string) {
   const buf = typeof input === "string" ? Buffer.from(input) : input;
@@ -56,64 +58,29 @@ function signJwtRS256({
 }
 
 export async function GET(request: Request) {
-  const initData = request.headers.get("Authorization") ?? "";
-  if (!initData) {
-    return NextResponse.json(
-      { error: "Missing Authorization" },
-      { status: 401 }
-    );
+  const session = await readSession(request);
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const botKey = process.env.BOT_KEY;
-  if (!botKey) {
-    return NextResponse.json(
-      { error: "Missing BOT_KEY on server" },
-      { status: 500 }
-    );
+  const issuer = env.CONVEX_JWT_ISSUER;
+  const audience = env.CONVEX_JWT_AUDIENCE;
+  const kid = env.CONVEX_JWT_KID;
+  const privateKeyPem = env.CONVEX_JWT_PRIVATE_KEY;
+  if (!session.email) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  if (!isValid(initData, botKey)) {
-    return NextResponse.json({ error: "Invalid initData" }, { status: 401 });
-  }
-
-  const parsed = parse(initData);
-  const user = parsed.user;
-  if (!user) {
-    return NextResponse.json(
-      { error: "Missing user in initData" },
-      { status: 401 }
-    );
-  }
-
-  const issuer = process.env.CONVEX_JWT_ISSUER;
-  const audience = process.env.CONVEX_JWT_AUDIENCE;
-  const kid = process.env.CONVEX_JWT_KID ?? "telegram-miniapp";
-  const privateKeyPem = process.env.CONVEX_JWT_PRIVATE_KEY!.replaceAll(
-    "\\\\n",
-    "\n"
-  );
-  if (!issuer || !audience || !privateKeyPem) {
-    return NextResponse.json(
-      {
-        error:
-          "Missing CONVEX_JWT_ISSUER / CONVEX_JWT_AUDIENCE / CONVEX_JWT_PRIVATE_KEY",
-      },
-      { status: 500 }
-    );
-  }
-
+  console.log("session", session);
   const token = signJwtRS256({
     issuer,
     audience,
-    subject: String(user.id),
+    subject: session.email,
     kid,
     privateKeyPem,
     expiresInSeconds: 60 * 60,
-    name:
-      [user.firstName, user.lastName].filter(Boolean).join(" ") ||
-      user.username,
-    nickname: user.username,
   });
+  console.log("token", token);
 
   return NextResponse.json({ token });
 }

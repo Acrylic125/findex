@@ -1,17 +1,12 @@
 "use client";
-import { SessionProvider } from "next-auth/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   createContext,
   useContext,
   useEffect,
   useMemo,
-  useRef,
   useState,
 } from "react";
-import { retrieveRawInitData } from "@tma.js/sdk-react";
-import posthog from "posthog-js";
-import { env } from "@/lib/env";
 import { ConvexProviderWithAuth, ConvexReactClient } from "convex/react";
 import { useStableQuery } from "./use-stable-query";
 import { api } from "../../convex/_generated/api";
@@ -37,19 +32,46 @@ export function SelfProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
-function useAuthFromProviderTelegram() {
+function useAuthFromProviderMicrosoft() {
+  const [isLoading, setIsLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
 
   useEffect(() => {
-    // Next.js will render this component on the server too; guard window access.
     if (typeof window === "undefined") return;
-    setIsAuthenticated(true);
-    // setIsAuthenticated(Boolean(retrieveRawInitData()));
+
+    let cancelled = false;
+
+    async function loadSession() {
+      try {
+        const res = await fetch("/api/auth/microsoft/session", {
+          method: "GET",
+          cache: "no-store",
+        });
+        if (!cancelled) {
+          const data = (await res.json()) as { authenticated?: boolean };
+          setIsAuthenticated(Boolean(res.ok && data.authenticated));
+        }
+      } catch {
+        if (!cancelled) {
+          setIsAuthenticated(false);
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoading(false);
+        }
+      }
+    }
+
+    void loadSession();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   return useMemo(() => {
     return {
-      isLoading: false,
+      isLoading,
       isAuthenticated,
       fetchAccessToken: async ({
         forceRefreshToken,
@@ -59,13 +81,8 @@ function useAuthFromProviderTelegram() {
         if (typeof window === "undefined") {
           return null;
         }
-        return null;
-        const rawInitData = retrieveRawInitData();
-        if (!rawInitData) return null;
-
         const res = await fetch("/api/convex/token", {
           method: "GET",
-          headers: { Authorization: rawInitData },
           cache: forceRefreshToken ? "no-store" : "default",
         });
         if (!res.ok) return null;
@@ -73,24 +90,7 @@ function useAuthFromProviderTelegram() {
         return data.token ?? null;
       },
     };
-  }, [isAuthenticated]);
-  // const params = new URLSearchParams(rawInitData);
-  // const userJson = params.get("user");
-  // if (typeof userJson === "string") {
-  //   const user = JSON.parse(userJson);
-  //   return user;
-  // }
-  // return useMemo(
-  //   () => ({
-  //     // Whether the auth provider is in a loading state
-  //     isLoading: isLoading,
-  //     // Whether the auth provider has the user signed in
-  //     isAuthenticated: isAuthenticated ?? false,
-  //     // The async function to fetch the ID token
-  //     fetchAccessToken,
-  //   }),
-  //   [isLoading, isAuthenticated, fetchAccessToken],
-  // );
+  }, [isAuthenticated, isLoading]);
 }
 
 export function Providers({ children }: { children: React.ReactNode }) {
@@ -138,16 +138,14 @@ export function Providers({ children }: { children: React.ReactNode }) {
   // }, []);
 
   return (
-    <SessionProvider>
-      <ConvexProviderWithAuth
-        client={convex}
-        useAuth={useAuthFromProviderTelegram}
-      >
-        <QueryClientProvider client={queryClient}>
-          {/* <SelfProvider>{children}</SelfProvider> */}
-          {children}
-        </QueryClientProvider>
-      </ConvexProviderWithAuth>
-    </SessionProvider>
+    <ConvexProviderWithAuth
+      client={convex}
+      useAuth={useAuthFromProviderMicrosoft}
+    >
+      <QueryClientProvider client={queryClient}>
+        {/* <SelfProvider>{children}</SelfProvider> */}
+        {children}
+      </QueryClientProvider>
+    </ConvexProviderWithAuth>
   );
 }

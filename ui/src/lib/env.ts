@@ -10,11 +10,19 @@ export const env = createEnv({
     UPSTASH_REDIS_REST_TOKEN: z.string(),
     UPSTASH_REDIS_REST_URL: z.string(),
 
-    AZURE_AD_CLIENT_ID: z.string(),
-    AZURE_AD_CLIENT_SECRET: z.string(),
-    AZURE_AD_TENANT_ID: z.string(),
-    NEXTAUTH_SECRET: z.string().min(1),
-    NEXTAUTH_URL: z.string().optional(),
+    AZURE_AD_CLIENT_ID: z.string().default(""),
+    AZURE_AD_CLIENT_SECRET: z.string().default(""),
+    AZURE_AD_TENANT_ID: z.string().default(""),
+
+    CONVEX_JWT_AUDIENCE: z.string(),
+    CONVEX_JWT_ISSUER: z.string(),
+    CONVEX_JWT_PRIVATE_KEY: z
+      .string()
+      .transform((val) => val.replaceAll("\\\\n", "\n")),
+    CONVEX_JWT_PUBLIC_KEY: z
+      .string()
+      .transform((val) => val.replaceAll("\\\\n", "\n")),
+    CONVEX_JWT_KID: z.string(),
   },
   clientPrefix: "NEXT_PUBLIC_",
   client: {
@@ -34,8 +42,12 @@ export const env = createEnv({
     AZURE_AD_CLIENT_ID: process.env.AZURE_AD_CLIENT_ID,
     AZURE_AD_CLIENT_SECRET: process.env.AZURE_AD_CLIENT_SECRET,
     AZURE_AD_TENANT_ID: process.env.AZURE_AD_TENANT_ID,
-    NEXTAUTH_SECRET: process.env.NEXTAUTH_SECRET,
-    NEXTAUTH_URL: process.env.NEXTAUTH_URL,
+
+    CONVEX_JWT_AUDIENCE: process.env.CONVEX_JWT_AUDIENCE,
+    CONVEX_JWT_ISSUER: process.env.CONVEX_JWT_ISSUER,
+    CONVEX_JWT_PRIVATE_KEY: process.env.CONVEX_JWT_PRIVATE_KEY,
+    CONVEX_JWT_PUBLIC_KEY: process.env.CONVEX_JWT_PUBLIC_KEY,
+    CONVEX_JWT_KID: process.env.CONVEX_JWT_KID,
   },
 
   /**

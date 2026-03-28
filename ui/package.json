@@ -14,6 +14,7 @@
     "@convex-dev/aggregate": "^0.2.1",
     "@getbrevo/brevo": "^3.0.1",
     "@hookform/resolvers": "^5.2.2",
+    "@openauthjs/openauth": "^0.4.3",
     "@t3-oss/env-core": "^0.13.10",
     "@tanstack/react-query": "^5.90.20",
     "@tanstack/react-virtual": "^3.13.18",
