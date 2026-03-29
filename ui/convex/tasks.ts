@@ -498,45 +498,58 @@ export const getCourseRequestAndMatches = query({
       )
       .collect();
 
-    const wantIndexesSet = new Set(allSwapperWants.map((w) => w.wantIndex));
+    const wantIndexesSet = new Set(
+      allSwapperWants
+        .filter((w) => w.swapperId === mySwapper._id)
+        .map((w) => w.wantIndex)
+    );
 
     const allMyRequests = await ctx.db
       .query("swap_requests")
       .filter((q) =>
         q.or(
           q.eq(q.field("swapper1"), mySwapper._id),
-          q.eq(q.field("swapper2"), mySwapper._id)
+          q.eq(q.field("swapper2"), mySwapper._id),
+          q.eq(q.field("middlemanSwapper"), mySwapper._id)
         )
       )
       .collect();
 
-    const directMatches: ({
+    type BaseMatch = {
       otherSwapperId: Id<"swapper">;
-      isPerfectMatch: boolean;
       index: string;
     } & (
       | {
           status: undefined;
         }
       | {
-          status: "cancelled";
-          isSelfInitiated: boolean;
-          requestedAt: number;
-        }
-      | {
           status: "pending";
           isSelfInitiated: boolean;
-          requestedAt: number;
         }
       | {
           status: "swapped";
           isSelfInitiated: boolean;
         }
-    ))[] = [];
-    const threeWayCycleMatches: ((typeof directMatches)[number] & {
+    );
+    const directMatches: (BaseMatch & {
+      isPerfectMatch: boolean;
+      haveWhatTheyWant: boolean;
+      haveWhatIWant: boolean;
+    })[] = [];
+    const threeWayCycleMatches: (BaseMatch & {
       middlemanSwapperId: Id<"swapper">;
       middlemanIndex: string;
     })[] = [];
+
+    const swapperById = new Map(
+      allSwappers.map((swapper) => [swapper._id, swapper])
+    );
+    const wantsBySwapperId = new Map<Id<"swapper">, Set<string>>();
+    for (const want of allSwapperWants) {
+      const wants = wantsBySwapperId.get(want.swapperId) ?? new Set<string>();
+      wants.add(want.wantIndex);
+      wantsBySwapperId.set(want.swapperId, wants);
+    }
 
     // Direct matches.
     for (const otherSwapper of allSwappers) {
@@ -545,29 +558,26 @@ export const getCourseRequestAndMatches = query({
 
       // First check if this is a potential match. A potential match
       // is one where the other swapper's index is in my want indexes.
-      const isPotentialMatch = wantIndexesSet.has(otherSwapper.index);
-      // If not a potential match, continue.
-      if (!isPotentialMatch) {
-        continue;
-      }
+      const haveWhatIWant = wantIndexesSet.has(otherSwapper.index);
 
       // Check if this is a perfect match. A perfect match is one where the other swapper's index is in my want indexes and my index is in their want indexes.
-      let isPerfectMatchWithOther = false;
-      if (isPotentialMatch) {
-        const otherWants = allSwapperWants.filter(
-          (w) => w.swapperId === otherSwapper._id
-        );
-        isPerfectMatchWithOther = otherWants.some(
-          (w) => w.wantIndex === haveIndex
-        );
-      }
+      const otherWants = wantsBySwapperId.get(otherSwapper._id);
+      if (!otherWants) continue;
+      const haveWhatTheyWant = otherWants.has(haveIndex);
+      const isPerfectMatchWithOther = haveWhatTheyWant && haveWhatIWant;
 
       // Now we check the availability of the match.
       const isAvailable = !mySwapper.hasSwapped && !otherSwapper.hasSwapped;
       const myMatchRequestWithOther = allMyRequests.find(
         (r) =>
-          r.swapper1 === otherSwapper._id || r.swapper2 === otherSwapper._id
+          (r.swapper1 === otherSwapper._id ||
+            r.swapper2 === otherSwapper._id) &&
+          r.middlemanSwapper === undefined
       );
+      // If not a potential match AND there is no request for this match, continue.
+      if (!haveWhatIWant && myMatchRequestWithOther === undefined) {
+        continue;
+      }
       // We show IF there was previously a request for this match, but not if the match is available.
       if (!isAvailable && myMatchRequestWithOther === undefined) {
         continue;
@@ -581,15 +591,19 @@ export const getCourseRequestAndMatches = query({
           directMatches.push({
             otherSwapperId: otherSwapper._id,
             isPerfectMatch: isPerfectMatchWithOther,
+            haveWhatTheyWant,
+            haveWhatIWant,
             index: otherSwapper.index,
             status: "pending",
             isSelfInitiated,
-            requestedAt: myMatchRequestWithOther._creationTime,
+            // requestedAt: myMatchRequestWithOther._creationTime,
           });
         } else {
           directMatches.push({
             otherSwapperId: otherSwapper._id,
             isPerfectMatch: isPerfectMatchWithOther,
+            haveWhatTheyWant,
+            haveWhatIWant,
             index: otherSwapper.index,
             status: undefined,
           });
@@ -598,24 +612,15 @@ export const getCourseRequestAndMatches = query({
       // No longer available.
       else {
         if (myMatchRequestWithOther) {
-          if (otherSwapper.previouslyMatchedWith === mySwapper._id) {
-            directMatches.push({
-              otherSwapperId: otherSwapper._id,
-              isPerfectMatch: isPerfectMatchWithOther,
-              index: otherSwapper.index,
-              status: "swapped",
-              isSelfInitiated,
-            });
-          } else {
-            directMatches.push({
-              otherSwapperId: otherSwapper._id,
-              isPerfectMatch: isPerfectMatchWithOther,
-              index: otherSwapper.index,
-              status: "cancelled",
-              isSelfInitiated,
-              requestedAt: myMatchRequestWithOther._creationTime,
-            });
-          }
+          directMatches.push({
+            otherSwapperId: otherSwapper._id,
+            isPerfectMatch: isPerfectMatchWithOther,
+            haveWhatTheyWant,
+            haveWhatIWant,
+            index: otherSwapper.index,
+            status: "swapped",
+            isSelfInitiated,
+          });
         } else {
           // This should not happen.
           console.error(
@@ -626,54 +631,104 @@ export const getCourseRequestAndMatches = query({
     }
 
     // Three-way cycle matches.
-    const filterNonPerfectMatches = directMatches.filter(
-      (m) => !m.isPerfectMatch
+    const threeWayConsideredMatches = directMatches.filter(
+      (m) => m.haveWhatIWant
     );
     // Find a middleman who wants what you have
     // and has an index that can be given to
     // someone else who has what you want.
-    const swapperById = new Map(
-      allSwappers.map((swapper) => [swapper._id, swapper])
-    );
-    const wantsBySwapperId = new Map<Id<"swapper">, Set<string>>();
-    for (const want of allSwapperWants) {
-      const wants = wantsBySwapperId.get(want.swapperId) ?? new Set<string>();
-      wants.add(want.wantIndex);
-      wantsBySwapperId.set(want.swapperId, wants);
-    }
 
-    for (const directMatch of filterNonPerfectMatches) {
-      const otherSwapper = swapperById.get(directMatch.otherSwapperId);
+    for (const mainTargetSwapper of threeWayConsideredMatches) {
+      const otherSwapper = swapperById.get(mainTargetSwapper.otherSwapperId);
       if (!otherSwapper) continue;
 
       const otherWants = wantsBySwapperId.get(otherSwapper._id);
       if (!otherWants || otherWants.size === 0) continue;
 
+      // Find the middleman.
       for (const middleman of allSwappers) {
         if (middleman._id === mySwapper._id) continue;
         if (middleman._id === otherSwapper._id) continue;
-        if (middleman.hasSwapped) continue;
 
         const middlemanWants = wantsBySwapperId.get(middleman._id);
         if (!middlemanWants?.has(haveIndex)) continue;
         if (!otherWants.has(middleman.index)) continue;
 
-        threeWayCycleMatches.push({
-          ...directMatch,
-          middlemanSwapperId: middleman._id,
-          middlemanIndex: middleman.index,
+        const canonicalId = [
+          mySwapper._id,
+          otherSwapper._id,
+          middleman._id,
+        ].sort();
+        const myMatchRequestWithBothOthers = allMyRequests.find((r) => {
+          const requestCanonicalId = [
+            r.swapper1,
+            r.swapper2,
+            r.middlemanSwapper,
+          ].sort();
+          return requestCanonicalId.every(
+            (id, index) => id === canonicalId[index]
+          );
         });
+        const isAvailable =
+          !mySwapper.hasSwapped &&
+          !otherSwapper.hasSwapped &&
+          !middleman.hasSwapped;
+        if (!myMatchRequestWithBothOthers && !isAvailable) continue;
+
+        // Deduce the status of the match.
+        const isSelfInitiated =
+          myMatchRequestWithBothOthers?.initiator === mySwapper._id;
+        if (isAvailable) {
+          if (myMatchRequestWithBothOthers) {
+            threeWayCycleMatches.push({
+              otherSwapperId: otherSwapper._id,
+              index: mainTargetSwapper.index,
+              middlemanSwapperId: middleman._id,
+              middlemanIndex: middleman.index,
+              status: "pending",
+              isSelfInitiated,
+            });
+          } else {
+            threeWayCycleMatches.push({
+              otherSwapperId: otherSwapper._id,
+              index: mainTargetSwapper.index,
+              middlemanSwapperId: middleman._id,
+              middlemanIndex: middleman.index,
+              status: undefined,
+            });
+          }
+        } else {
+          if (myMatchRequestWithBothOthers) {
+            threeWayCycleMatches.push({
+              otherSwapperId: otherSwapper._id,
+              index: mainTargetSwapper.index,
+              middlemanSwapperId: middleman._id,
+              middlemanIndex: middleman.index,
+              status: "swapped",
+              isSelfInitiated,
+            });
+          } else {
+            // This should not happen.
+            console.error(
+              "Unhandled state where the request is no longer available but myMatchRequestWithBothOthers is defined."
+            );
+          }
+        }
+        // threeWayCycleMatches.push({
+        //   ...match,
+        //   middlemanSwapperId: middleman._id,
+        //   middlemanIndex: middleman.index,
+        // });
       }
     }
 
     // Sort matches by:
-    // 1. By state: Swapped -> Pending -> undefined -> Cancelled
+    // 1. By state: Pending -> undefined -> Swapped
     // 2. In case of same state, by perfect match first, then requestedAt (newest first)
     const statusPriority = {
-      swapped: 0,
       pending: 1,
       undefined: 2,
-      cancelled: 3,
+      swapped: 3,
     } as const;
     directMatches.sort((a, b) => {
       const aState =
@@ -987,18 +1042,29 @@ export const handleSwapRequestWebhookCallback = internalMutation({
     const thisUser = isFromSwapper1 ? user1 : user2;
     const otherUser = isFromSwapper1 ? user2 : user1;
 
-    const canonicalSwapper1 =
-      user1.telegramUserId > user2.telegramUserId ? swapper1._id : swapper2._id;
-    const canonicalSwapper2 =
-      user1.telegramUserId > user2.telegramUserId ? swapper2._id : swapper1._id;
     const request = await ctx.db
       .query("swap_requests")
-      .withIndex("by_course_swapper_pair", (q) =>
-        q
-          .eq("courseId", parsedCourseId)
-          .eq("swapper1", canonicalSwapper1)
-          .eq("swapper2", canonicalSwapper2)
+      .filter((q) =>
+        q.and(
+          q.eq(q.field("courseId"), parsedCourseId),
+          q.or(
+            q.and(
+              q.eq(q.field("swapper1"), swapper1._id),
+              q.eq(q.field("swapper2"), swapper2._id)
+            ),
+            q.and(
+              q.eq(q.field("swapper1"), swapper2._id),
+              q.eq(q.field("swapper2"), swapper1._id)
+            )
+          )
+        )
       )
+      // .withIndex("by_course_swapper_pair", (q) =>
+      //   q
+      //     .eq("courseId", parsedCourseId)
+      //     .eq("swapper1", canonicalSwapper1)
+      //     .eq("swapper2", canonicalSwapper2)
+      // )
       .unique();
     if (!request) {
       throw new ConvexError("Swap request not found.");

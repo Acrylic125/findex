@@ -26,7 +26,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "./ui/badge";
 import { Alert, AlertTitle } from "./ui/alert";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Checkbox } from "./ui/checkbox";
 import { toast } from "sonner";
 import { useConvexMutationState } from "./use-convex-mutation-state";
@@ -345,7 +345,9 @@ export function SwapItemMatch({
       </Badge>
     );
   } else {
-    statusElement = <span className="text-sm text-primary-500">Request</span>;
+    statusElement = (
+      <span className="text-sm lg:text-base text-primary-500">Request</span>
+    );
   }
 
   return (
@@ -359,14 +361,16 @@ export function SwapItemMatch({
         className
       )}
     >
-      <TableCell className="font-medium text-sm lg:text-base text-foreground">
+      <TableCell
+        className={cn("font-medium text-sm lg:text-base text-foreground", {
+          "text-destructive": !match.haveWhatIWant,
+        })}
+      >
         {match.index}
       </TableCell>
       <TableCell className="text-foreground text-sm lg:text-base">
-        {match.isPerfectMatch ? (
-          <Badge variant="outline" className="text-primary-500 bg-primary/10">
-            {myIndex}
-          </Badge>
+        {match.haveWhatTheyWant ? (
+          <span className="text-primary-500">{myIndex}</span>
         ) : (
           <Badge variant="destructive">Don't have {"):"}</Badge>
         )}
@@ -380,10 +384,12 @@ export function SwapItemMatch({
 
 export function SwapItemThreeWayCycleMatch({
   match,
+  myIndex,
   className,
   onRequestOpen,
 }: {
   match: ThreeWayCycleMatch;
+  myIndex: string;
   className?: string;
   onRequestOpen?: (id: Id<"swapper">, middlemanId: Id<"swapper">) => void;
 }) {
@@ -413,20 +419,17 @@ export function SwapItemThreeWayCycleMatch({
       onClick={() =>
         onRequestOpen?.(match.otherSwapperId, match.middlemanSwapperId)
       }
-      className={cn(
-        {
-          "bg-primary-500/10": match.isPerfectMatch,
-          // "opacity-50": match.status === "swapped",
-        },
-        className
-      )}
+      className={className}
     >
       <TableCell className="font-medium text-sm lg:text-base text-foreground">
-        1. <span className="text-primary-500"> {match.index}</span>
-        <span className="text-muted-foreground text-xs">{" <-> "}</span>
-        {match.middlemanIndex} <br />
-        2. <span className="text-primary-500"> {match.middlemanIndex}</span>
-        <span className="text-muted-foreground text-xs">{" <-> "}</span>
+        <span className="text-muted-foreground">First swap</span>{" "}
+        <span className="text-primary-500"> {myIndex}</span>
+        <span className="text-muted-foreground">{" <-> "}</span>
+        <span className="text-secondary-500">{match.middlemanIndex}</span>{" "}
+        <br />
+        <span className="text-muted-foreground">Then swap</span>{" "}
+        <span className="text-secondary-500"> {match.middlemanIndex}</span>
+        <span className="text-muted-foreground">{" <-> "}</span>
         {match.index}
       </TableCell>
       <TableCell className="flex flex-row gap-2 items-center justify-end text-right text-sm lg:text-base">
@@ -488,12 +491,22 @@ export function CourseSwapMatches({
   //   return `/swap/${code}/edit?backTo=${encodeURIComponent(window.location.href)}`;
   // }, [code]);
   const [editUrl, setEditUrl] = useState<string>("/swap");
+  const [sheetSide, setSheetSide] = useState<"bottom" | "right">("bottom");
   useEffect(() => {
     if (typeof window === "undefined") return;
     setEditUrl(
       `/swap/${code}/edit?backTo=${encodeURIComponent(window.location.href)}`
     );
   }, [code]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mq = window.matchMedia("(min-width: 768px)");
+    const update = () => setSheetSide(mq.matches ? "right" : "bottom");
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
 
   let directMatchElement = null;
   if (requestsQuery === undefined) {
@@ -574,6 +587,7 @@ export function CourseSwapMatches({
                 <SwapItemThreeWayCycleMatch
                   key={`${rawMatch.otherSwapperId}-${rawMatch.middlemanSwapperId}-${index}`}
                   match={rawMatch}
+                  myIndex={requestsQuery.course.haveIndex ?? ""}
                 />
               );
             })}
@@ -655,37 +669,6 @@ export function CourseSwapMatches({
         <h2 className="text-base lg:text-lg xl:text-xl font-bold">
           Direct Matches
         </h2>
-        {/* <div className="flex flex-row gap-2 items-center justify-between">
-          <h2 className="text-base lg:text-lg xl:text-xl font-bold">Matches</h2>
-          {requestsQuery && requestsQuery.course.hasSwapped !== undefined && (
-            <div className="flex flex-row gap-2 items-center">
-              <p className="text-sm text-muted-foreground">Have Swapped?</p>
-              <Checkbox
-                className="size-5"
-                checked={requestsQuery.course.hasSwapped}
-                onCheckedChange={() => {
-                  void toggleSwapRequestState.handle({
-                    courseId: requestsQuery.course.id,
-                    hasSwapped: !requestsQuery.course.hasSwapped,
-                  });
-                }}
-                disabled={toggleSwapRequestState.isPending}
-              />
-            </div>
-          )}
-        </div> */}
-        {/* {requestsQuery !== undefined &&
-          requestsQuery.course.hasSwapped === true && (
-            <div className="text-sm text-muted-foreground border border-border rounded-md p-2 bg-card">
-              <h2 className="text-foreground">
-                You already found a swap for this course.
-              </h2>
-              <p className="text-muted-foreground">
-                Keep this disabled if you{"'"}ve already found a match to avoid
-                receiving swap requests.
-              </p>
-            </div>
-          )} */}
         {directMatchElement}
       </div>
       <div className="flex flex-col gap-2">
@@ -703,7 +686,7 @@ export function CourseSwapMatches({
           })
         }
       >
-        <SheetContent side="bottom">
+        <SheetContent side={sheetSide}>
           {bottomSheetMatchItemData && (
             <SwapItemMatchBottomSheet
               id={bottomSheetMatchItemData.id}
