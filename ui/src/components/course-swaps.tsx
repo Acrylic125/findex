@@ -309,12 +309,20 @@ export function SwapItemMatchBottomSheet({
               <DirectSwapArtboard
                 yourIndex={course.haveIndex}
                 otherIndex={match.index}
+                iam={
+                  (match.status === "pending" || match.status === "swapped") &&
+                  !match.isSelfInitiated
+                    ? "target"
+                    : "intiator"
+                }
+                // iam="intiator"
               />
             ) : (
               <ThreeWayCycleArtboard
                 yourIndex={course.haveIndex}
                 otherIndex={match.index}
-                middleIndex={course.haveIndex}
+                middleIndex={matchObj.match.middlemanIndex}
+                iam="intiator"
               />
             )}
           </div>
@@ -613,6 +621,15 @@ export function CourseSwapMatches({
                   key={`${rawMatch.otherSwapperId}-${rawMatch.middlemanSwapperId}-${index}`}
                   match={rawMatch}
                   myIndex={requestsQuery.course.haveIndex ?? ""}
+                  onRequestOpen={() => {
+                    setBottomSheetMatchItem({
+                      match: {
+                        type: "three-way-cycle",
+                        match: rawMatch,
+                      },
+                      isOpen: true,
+                    });
+                  }}
                 />
               );
             })}

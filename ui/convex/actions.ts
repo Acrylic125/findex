@@ -42,29 +42,75 @@ export const sendSwapRequest = action({
       middlemanSwapperId: args.middlemanSwapperId,
     });
 
-    const { course, initiator: me, target: other, webhook } = result;
-    const username = me.handle;
+    const { course, initiator, target, middleman, webhook } = result;
+    const username = initiator.handle;
 
     const myIndexUrl = buildFStarsUrl(
       course.code,
-      me.index,
+      initiator.index,
       course.ay,
       course.semester
     );
     const otherIndexUrl = buildFStarsUrl(
       course.code,
-      other.index,
+      target.index,
       course.ay,
       course.semester
     );
 
+    // 3 way swap.
+    if (middleman) {
+      await bot.sendMessage(
+        Number(middleman.telegramUserId),
+        `*${escapeMarkdown(course.code)} ${escapeMarkdown(course.name)} Swap Request*
+@${escapeMarkdown(username)} wants to do a 3 way swap with you!
+You only need to swap with them:
+They have: [${escapeMarkdown(initiator.index)}](${myIndexUrl})
+You have: [${escapeMarkdown(target.index)}](${otherIndexUrl}).`,
+        {
+          parse_mode: "Markdown",
+          disable_web_page_preview: true,
+          reply_markup: {
+            inline_keyboard: [
+              [
+                { text: "Accept", callback_data: webhook.accept },
+                { text: "Decline", callback_data: webhook.decline },
+              ],
+            ],
+          },
+        }
+      );
+      await bot.sendMessage(
+        Number(target.telegramUserId),
+        `*${escapeMarkdown(course.code)} ${escapeMarkdown(course.name)} Swap Request*
+@${escapeMarkdown(username)} wants to do a 3 way swap with you!
+After they swap with another party, you only need to swap with them:
+They will have: [${escapeMarkdown(initiator.index)}](${myIndexUrl})
+You have: [${escapeMarkdown(target.index)}](${otherIndexUrl}).`,
+        {
+          parse_mode: "Markdown",
+          disable_web_page_preview: true,
+          reply_markup: {
+            inline_keyboard: [
+              [
+                { text: "Accept", callback_data: webhook.accept },
+                { text: "Decline", callback_data: webhook.decline },
+              ],
+            ],
+          },
+        }
+      );
+      return;
+    }
+
+    // Direct swap.
     await bot
       .sendMessage(
-        Number(other.telegramUserId),
+        Number(target.telegramUserId),
         `*${escapeMarkdown(course.code)} ${escapeMarkdown(course.name)} Swap Request*
 @${escapeMarkdown(username)} wants to swap with you!
-They have: [${escapeMarkdown(me.index)}](${myIndexUrl})
-You have: [${escapeMarkdown(other.index)}](${otherIndexUrl}).`,
+They have: [${escapeMarkdown(initiator.index)}](${myIndexUrl})
+You have: [${escapeMarkdown(target.index)}](${otherIndexUrl}).`,
         {
           parse_mode: "Markdown",
           disable_web_page_preview: true,
@@ -83,7 +129,7 @@ You have: [${escapeMarkdown(other.index)}](${otherIndexUrl}).`,
       )
       .catch((error) => {
         console.error(
-          `Error sending message to ${other.telegramUserId}:`,
+          `Error sending message to ${target.telegramUserId}:`,
           error
         );
       });
@@ -202,7 +248,7 @@ You have accepted @${escapeMarkdown(initiator.handle)}'s request.
                   msgForInitiator = `*Swap pending confirmation for ${escapeMarkdown(courseLabel)}*.
 @${escapeMarkdown(middlemanSwapper.handle)} has accepted your request.
 
-3 / 3 confirmations received.`;
+2 / 3 confirmations received.`;
                   msgForTargetSwapper = `*Swap pending confirmation for ${escapeMarkdown(courseLabel)}*.
 @${escapeMarkdown(middlemanSwapper.handle)} has accepted a 3 way swap request you are participating in.
 
@@ -289,50 +335,24 @@ You declined to participate in @${escapeMarkdown(initiator.handle)}'s 3 way swap
           }
         }
 
-        if (msgForInitiator !== "") {
+        const sendMessage = async (userId: bigint | undefined, msg: string) => {
+          if (msg === "") return;
+          if (!userId) return;
           await bot
-            .sendMessage(Number(initiator.telegramUserId), msgForInitiator, {
+            .sendMessage(Number(userId), msg, {
               parse_mode: "Markdown",
             })
             .catch((error) => {
-              console.error(
-                `Error sending message to ${initiator.telegramUserId}:`,
-                error
-              );
+              console.error(`Error sending message to ${userId}:`, error);
             });
-        }
-        if (msgForTargetSwapper !== "") {
-          await bot
-            .sendMessage(
-              Number(targetSwapper.telegramUserId),
-              msgForTargetSwapper,
-              {
-                parse_mode: "Markdown",
-              }
-            )
-            .catch((error) => {
-              console.error(
-                `Error sending message to ${targetSwapper.telegramUserId}:`,
-                error
-              );
-            });
-        }
-        if (middlemanSwapper && msgForMiddlemanSwapper !== "") {
-          await bot
-            .sendMessage(
-              Number(middlemanSwapper.telegramUserId),
-              msgForMiddlemanSwapper,
-              {
-                parse_mode: "Markdown",
-              }
-            )
-            .catch((error) => {
-              console.error(
-                `Error sending message to ${middlemanSwapper.telegramUserId}:`,
-                error
-              );
-            });
-        }
+        };
+
+        await Promise.all([
+          sendMessage(initiator.telegramUserId, msgForInitiator),
+          sendMessage(targetSwapper.telegramUserId, msgForTargetSwapper),
+          sendMessage(middlemanSwapper?.telegramUserId, msgForMiddlemanSwapper),
+        ]);
+
         await bot.answerCallbackQuery(args.callbackId).catch(() => {});
         if (args.messageChatId != null && args.messageId != null) {
           await bot

@@ -953,18 +953,6 @@ export const requestSwap = internalMutation({
       })
       .first();
 
-    // const existing = await ctx.db
-    //   .query("swap_requests")
-    //   .withIndex("by_courseId_initiator_targetSwapper_middlemanSwapper", (q) =>
-    //     q
-    //       .eq("courseId", course._id)
-    //       .eq("initiator", meSwapper._id)
-    //       .eq("targetSwapper", targetSwapper._id)
-    //       .eq("middlemanSwapper", middlemanSwapper?._id)
-    //   )
-    //   .unique();
-
-    console.log("HELLO");
     if (existingRequests) {
       throw new ConvexError(
         "You have already requested a swap for this course."
